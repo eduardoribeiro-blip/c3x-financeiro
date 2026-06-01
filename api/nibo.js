@@ -1,4 +1,5 @@
 const https = require('https');
+const url = require('url');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,40 +9,60 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { token, endpoint, ...rest } = req.query;
+
   if (!token || !endpoint) {
     return res.status(400).json({ error: 'token e endpoint obrigatorios' });
   }
 
-  const params = new URLSearchParams({ apitoken: token, ...rest });
-  const path = `/empresas/v1/${endpoint}?${params.toString()}`;
+  // Monta query string sem token e endpoint
+  const qs = Object.keys(rest)
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(rest[k])}`)
+    .join('&');
+
+  const niboPath = `/empresas/v1/${endpoint}?apitoken=${token}${qs ? '&' + qs : ''}`;
 
   return new Promise((resolve) => {
     const options = {
       hostname: 'api.nibo.com.br',
-      path: path,
+      port: 443,
+      path: niboPath,
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'C3X-Dashboard/1.0'
+      }
     };
 
-    const request = https.request(options, (response) => {
-      let data = '';
-      response.on('data', (chunk) => { data += chunk; });
+    const req2 = https.request(options, (response) => {
+      let body = '';
+      response.on('data', chunk => { body += chunk; });
       response.on('end', () => {
         try {
-          const parsed = JSON.parse(data);
-          res.status(response.statusCode).json(parsed);
+          const json = JSON.parse(body);
+          res.status(response.statusCode).json(json);
         } catch (e) {
-          res.status(500).json({ error: 'Resposta invalida do Nibo', raw: data.substring(0, 200) });
+          res.status(500).json({ 
+            error: 'Parse error', 
+            status: response.statusCode,
+            body: body.substring(0, 500) 
+          });
         }
         resolve();
       });
     });
 
-    request.on('error', (err) => {
-      res.status(500).json({ error: 'Erro de conexao', detail: err.message });
+    req2.on('error', (e) => {
+      res.status(500).json({ error: 'Request failed', detail: e.message, code: e.code });
       resolve();
     });
 
-    request.end();
+    req2.setTimeout(10000, () => {
+      req2.destroy();
+      res.status(504).json({ error: 'Timeout ao conectar com Nibo' });
+      resolve();
+    });
+
+    req2.end();
   });
 };

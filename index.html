@@ -371,9 +371,16 @@ const gc = { grid:'rgba(255,255,255,0.06)', text:'#8892a4' };
 
 // Chama o proxy Vercel em vez da API diretamente
 async function niboGet(endpoint, extraParams = {}) {
-  const params = new URLSearchParams({ token: TOKEN, endpoint, ...extraParams });
-  const r = await fetch(`/api/nibo?${params.toString()}`);
-  if (!r.ok) throw new Error(`Erro ${r.status}`);
+  // Monta manualmente para evitar double-encoding dos parâmetros OData ($filter com aspas)
+  let qs = `token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent(endpoint)}`;
+  for (const [k, v] of Object.entries(extraParams)) {
+    qs += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+  }
+  const r = await fetch(`/api/nibo?${qs}`);
+  if (!r.ok) {
+    const errBody = await r.json().catch(() => ({}));
+    throw new Error(`Erro ${r.status}: ${JSON.stringify(errBody)}`);
+  }
   return r.json();
 }
 

@@ -9,13 +9,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'token e endpoint obrigatorios' });
   }
 
+  // Decodifica endpoint (ex: schedules%2Fcredit -> schedules/credit)
+  const decodedEndpoint = decodeURIComponent(endpoint);
+
+  // Monta params sem token e endpoint
   const rawQuery = req.url.split('?')[1] || '';
   const params = new URLSearchParams(rawQuery);
   params.delete('token');
   params.delete('endpoint');
   params.set('apitoken', token);
 
-  const niboUrl = `https://api.nibo.com.br/empresas/v1/${endpoint}?${params.toString()}`;
+  const niboUrl = `https://api.nibo.com.br/empresas/v1/${decodedEndpoint}?${params.toString()}`;
 
   try {
     const response = await fetch(niboUrl, {
@@ -26,7 +30,7 @@ module.exports = async function handler(req, res) {
       const data = JSON.parse(text);
       return res.status(response.status).json(data);
     } catch(e) {
-      return res.status(500).json({ error: 'Parse error', body: text.substring(0, 300), niboStatus: response.status });
+      return res.status(500).json({ error: 'Parse error', niboStatus: response.status, body: text.substring(0, 300) });
     }
   } catch (err) {
     return res.status(500).json({ error: err.message });

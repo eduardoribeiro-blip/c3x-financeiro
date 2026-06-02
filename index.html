@@ -442,16 +442,16 @@ async function carregarTudo() {
   const contasData = await niboGet('accounts', { '$orderby':'name', '$top':'50' });
 
   document.getElementById('loading-label').textContent = 'Buscando contas a receber...';
-  const receberData = await niboGet('schedules/credit', { '$orderby':'dueDate', '$top':'200', '$filter':"situation eq 'opened'" });
+  const receberData = await niboGet('schedules/credit', { '$orderby':'dueDate', '$top':'200' });
 
   document.getElementById('loading-label').textContent = 'Buscando contas a pagar...';
-  const pagarData = await niboGet('schedules/debit', { '$orderby':'dueDate', '$top':'200', '$filter':"situation eq 'opened'" });
+  const pagarData = await niboGet('schedules/debit', { '$orderby':'dueDate', '$top':'200' });
 
   document.getElementById('loading-label').textContent = 'Buscando recebimentos do mês...';
-  const recebidoMes = await niboGet('schedules/credit', { '$top':'200', '$filter':`year(dueDate) eq ${ano} AND month(dueDate) eq ${mes} AND situation eq 'received'` });
+  const recebidoMes = await niboGet('schedules/credit', { '$orderby':'dueDate', '$top':'200', '$filter':`year(dueDate) eq ${ano} AND month(dueDate) eq ${mes}` });
 
   document.getElementById('loading-label').textContent = 'Buscando pagamentos do mês...';
-  const pagoMes = await niboGet('schedules/debit', { '$top':'200', '$filter':`year(dueDate) eq ${ano} AND month(dueDate) eq ${mes} AND situation eq 'paid'` });
+  const pagoMes = await niboGet('schedules/debit', { '$orderby':'dueDate', '$top':'200', '$filter':`year(dueDate) eq ${ano} AND month(dueDate) eq ${mes}` });
 
   document.getElementById('loading-label').textContent = 'Buscando extrato...';
   const extratoData = await niboGet('transactions', { '$orderby':'date desc', '$top':'60' }).catch(()=>({items:[]}));

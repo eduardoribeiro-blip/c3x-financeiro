@@ -518,18 +518,24 @@ const PROJ = {
   alunos:   [21, 41, 41, 40, 40, 40, 60, 60, 80, 80, 60, 60],
 };
 const PROJ_CAT = {
-  'CSC':                              [2305, 4805, 4805, 4805, 4805, 4805, 4805, 4805, 4805, 4805, 4805, 4805],
-  'Sistema':                          [64,   64,   64,   64,   64,   64,   64,   64,   64,   64,   64,   64],
-  'Custo serviço prestado - mão de obra':[2500,5000,5000,5000,5000,5000,5000,5000,5000,5000,5000,5000],
-  'INSS / IRRF':                      [259,  259,  259,  259,  259,  259,  259,  259,  259,  259,  259,  259],
-  'Despesa Financeira':               [1040.84,161.46,158.47,1151.47,158.47,158.47,1211.27,0,0,1271.07,0,0],
-  'TFF':                              [0,0,0,0,0,0,0,0,0,0,0,0],
-  'Impostos sobre receita':           [0,0,0,0,0,0,0,0,0,0,0,0],
-  'Despesas com cobrança':            [0,0,0,0,0,0,0,0,0,0,0,0],
-  'FGTS':                             [0,0,0,0,0,0,0,0,0,0,0,0],
-  'Marketing':                        [0,0,0,0,0,0,0,0,0,0,0,0],
-  'Aluguel':                          [0,0,0,0,0,0,0,0,0,0,0,0],
-  'Material de escritório':           [0,0,0,0,0,0,0,0,0,0,0,0],
+  'Adiantamento de Lucros':                        [0,0,0,0,0,0,0,0,0,0,0,0],
+  'Prestação de Serviço por Terceiros':            [2305,4805,4805,4805,4805,4805,4805,4805,4805,4805,4805,4805],
+  'Custo serviço prestado - mão de obra':          [2500,5000,5000,5000,5000,5000,5000,5000,5000,5000,5000,5000],
+  'Almoço / Jantar / Coffe Break':                 [500,500,500,500,500,500,500,500,500,500,500,500],
+  'Brinde - Eventos':                              [500,500,500,500,500,500,500,500,500,500,500,500],
+  'Dedução da Receita - Comissão (Escola de Sócios)':[400,800,800,800,800,800,800,800,800,800,800,800],
+  'Dedução da Receita - Comissão (Prime)':         [700,700,700,700,700,700,700,700,700,700,700,700],
+  'Gráfica':                                       [100,100,100,100,100,100,100,100,100,100,100,100],
+  'INSS / IRRF':                                   [259,259,259,259,259,259,259,259,259,259,259,259],
+  'Despesas com cobrança':                         [100,100,100,100,100,100,100,100,100,100,100,100],
+  'Sistemas':                                      [64,64,64,64,64,64,64,64,64,64,64,64],
+  'Dedução da Receita - Comissão (Destrava)':      [0,0,300,0,0,300,300,0,0,300,0,0],
+  'Trafego Pago':                                  [500,500,500,500,500,500,500,500,500,500,500,500],
+  'TFF':                                           [0,0,0,0,0,0,0,0,0,0,0,0],
+  'Impostos - DAS':                                [150,150,150,150,150,150,150,150,150,150,150,150],
+  'Transporte / Uber / Gasolina':                  [100,100,100,100,100,100,100,100,100,100,100,100],
+  'FGTS':                                          [65,65,65,65,65,65,65,65,65,65,65,65],
+  'Material de escritório':                        [50,50,50,50,50,50,50,50,50,50,50,50],
 };
 
 /* ═══════════════════════════════════════════
@@ -607,8 +613,8 @@ async function carregarNibo() {
   document.getElementById('loader-label').textContent = 'Buscando receitas...';
 
   // Buscar schedules/credit (contas a receber) por mês
-  const creditData = await niboGet('schedules/credit', {'$orderby':'dueDate','$top':'500'});
-  const debitData  = await niboGet('schedules/debit',  {'$orderby':'dueDate','$top':'500'});
+  const creditData = await niboGet('schedules/credit', {'$orderby':'dueDate','$top':'500','$filter':'year(dueDate) eq 2026'});
+  const debitData  = await niboGet('schedules/debit',  {'$orderby':'dueDate','$top':'500','$filter':'year(dueDate) eq 2026'});
 
   // Processar por mês
   REAL.receita  = Array(12).fill(0);
@@ -625,7 +631,7 @@ async function carregarNibo() {
     REAL.receita[m] += v;
 
     // Por categoria de receita (Escola, Prime, Destrava)
-    const cat = item.categories?.[0]?.name || item.categoryName || '';
+    const cat = item.categories?.[0]?.categoryName || item.categoryName || '';
     const desc = (item.description||'').toLowerCase();
     const stake = (item.stakeholder?.name||'').toLowerCase();
     if (cat.toLowerCase().includes('escola') || desc.includes('escola') || cat.toLowerCase().includes('sócio')) {
@@ -647,7 +653,7 @@ async function carregarNibo() {
     REAL.despesa[m] += v;
 
     // Categoria
-    const cat = item.categories?.[0]?.name || item.categoryName || 'Outros';
+    const cat = item.categories?.[0]?.categoryName || item.categoryName || 'Outros';
     if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
     REAL.categorias[cat][m] += v;
   }

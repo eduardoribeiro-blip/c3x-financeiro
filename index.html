@@ -243,11 +243,13 @@ tr:hover td { background: #f9fafb; }
       <svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
       Visão por Serviço
     </a>
-    <div class="sidebar-sub sidebar-nav">
-      <a href="#" onclick="goPage('escola',this)">Escola de Sócios</a>
-      <a href="#" onclick="goPage('prime',this)">Prime</a>
-      <a href="#" onclick="goPage('destrava',this)">Destrava</a>
-    </div>
+  </div>
+  <div class="sidebar-section">Sistema</div>
+  <div class="sidebar-nav">
+    <a href="#" onclick="goPage('config',this)">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a6.94 6.94 0 00-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      Configurações
+    </a>
   </div>
   <div class="sidebar-bottom">
     <div class="sidebar-user">
@@ -510,6 +512,69 @@ tr:hover td { background: #f9fafb; }
     </div>
   </div>
 
+  <!-- PAGE: CONFIGURAÇÕES -->
+  <div class="page" id="page-config">
+    <div class="page-header">
+      <div class="page-badge">Sistema</div>
+      <h1 class="page-title">Configurações</h1>
+      <p class="page-sub">Defina KPIs operacionais por centro de custo. Os dados ficam salvos no seu navegador.</p>
+    </div>
+
+    <!-- KPIs disponíveis -->
+    <div class="table-card" style="margin-bottom:1.5rem">
+      <div class="table-header">
+        <div class="table-title">KPIs Disponíveis</div>
+        <div class="table-sub">Selecione quais indicadores cada centro de custo vai usar</div>
+      </div>
+      <div style="padding:1rem 1.25rem">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem" id="kpi-tipos-grid"></div>
+      </div>
+    </div>
+
+    <!-- Centros de custo -->
+    <div class="table-card" style="margin-bottom:1.5rem">
+      <div class="table-header">
+        <div class="table-title">Centros de Custo — KPIs por Mês</div>
+        <div class="table-sub">Preencha os valores operacionais mensais</div>
+      </div>
+      <div id="config-ccs-container" style="padding:0 1.25rem 1.25rem"></div>
+    </div>
+
+    <button onclick="salvarConfig()" style="padding:10px 24px;background:var(--green);border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:white;cursor:pointer">
+      Salvar Configurações
+    </button>
+    <span id="config-saved-msg" style="display:none;margin-left:12px;color:var(--green);font-size:13px">✓ Salvo!</span>
+  </div>
+
+  <!-- PAGE: SERVIÇOS (dinâmico por CC) -->
+  <div class="page" id="page-servicos-cc">
+    <div class="page-header">
+      <div class="page-badge">Serviço</div>
+      <h1 class="page-title" id="servico-cc-title">—</h1>
+      <p class="page-sub" id="servico-cc-sub">Dados financeiros do Nibo + KPIs operacionais configurados</p>
+    </div>
+    <div class="kpi-grid" id="servico-cc-kpis"></div>
+    <div class="charts-grid cols2">
+      <div class="chart-card">
+        <div class="chart-title">Despesas mensais</div>
+        <div style="height:200px"><canvas id="chartCCDesp"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title" id="chart-cc-kpi-title">KPI operacional</div>
+        <div style="height:200px"><canvas id="chartCCKpi"></canvas></div>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-header"><div class="table-title">Lançamentos do centro de custo</div></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th></tr></thead>
+          <tbody id="servico-cc-lancamentos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /main -->
 
 <script>
@@ -623,6 +688,8 @@ async function niboGet(endpoint, extra={}) {
    CARREGAR DADOS DO NIBO
 ═══════════════════════════════════════════ */
 async function carregarNibo() {
+  document.getElementById('loader-label').textContent = 'Buscando centros de custo...';
+  await carregarCentrosCusto();
   document.getElementById('loader-label').textContent = 'Buscando receitas...';
 
   // Buscar schedules/credit (contas a receber) por mês
@@ -703,9 +770,7 @@ function renderTudo() {
   renderMensal();
   renderProjecoes();
   renderServicos();
-  renderEscola();
-  renderPrime();
-  renderDestrava();
+  renderConfig();
 }
 
 function renderVisao() {
@@ -880,37 +945,299 @@ function renderProjecoes() {
   }
 }
 
+/* ═══════════════════════════════════════════
+   CENTROS DE CUSTO — DADOS DO NIBO
+═══════════════════════════════════════════ */
+let CC_DATA = {}; // { nomCC: { desp: Array(12), lancamentos: [] } }
+let CC_RECEITA = {}; // { nomeCC: Array(12) } — receitas por CC via categories
+
+async function carregarCentrosCusto() {
+  // Buscar todos os débitos de 2026 com centro de custo
+  const debitData = await niboGet('schedules/debit', {'$orderby':'dueDate','$top':'500','$filter':'year(dueDate) eq 2026'});
+  const creditData = await niboGet('schedules/credit', {'$orderby':'dueDate','$top':'500','$filter':'year(dueDate) eq 2026'});
+
+  CC_DATA = {};
+  CC_RECEITA = {};
+
+  for (const item of (debitData.items||[])) {
+    const ccs = item.costCenters || [];
+    if (ccs.length === 0) continue; // ignorar sem CC
+    const mes = new Date(item.dueDate).getMonth();
+    const v = Math.abs(item.value||0);
+    for (const cc of ccs) {
+      const nome = cc.costCenterDescription || cc.description || cc.name || 'Outros';
+      if (!CC_DATA[nome]) CC_DATA[nome] = { desp: Array(12).fill(0), lancamentos: [] };
+      CC_DATA[nome].desp[mes] += v;
+      CC_DATA[nome].lancamentos.push({
+        data: item.dueDate, desc: item.description||'—',
+        cat: item.categories?.[0]?.categoryName||'—', valor: -v
+      });
+    }
+  }
+
+  // Receitas por CC (via costCenters nos créditos)
+  for (const item of (creditData.items||[])) {
+    const ccs = item.costCenters || [];
+    if (ccs.length === 0) continue;
+    const mes = new Date(item.dueDate).getMonth();
+    const v = Math.abs(item.value||0);
+    for (const cc of ccs) {
+      const nome = cc.costCenterDescription || cc.description || cc.name || 'Outros';
+      if (!CC_RECEITA[nome]) CC_RECEITA[nome] = Array(12).fill(0);
+      CC_RECEITA[nome][mes] += v;
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════
+   CONFIGURAÇÕES — KPIs OPERACIONAIS
+═══════════════════════════════════════════ */
+const KPI_TIPOS = [
+  { id:'unidades',  label:'Unidades / Clientes', icon:'👥', desc:'Ex: alunos, clientes ativos, participantes' },
+  { id:'novos',     label:'Novos no mês',         icon:'➕', desc:'Novas aquisições no período' },
+  { id:'meta_rec',  label:'Meta de Receita',       icon:'🎯', desc:'Receita projetada por mês' },
+  { id:'cac',       label:'CAC (custo por cliente)',icon:'💰', desc:'Calculado: despesa / novos clientes' },
+  { id:'ticket',    label:'Ticket Médio',          icon:'🎫', desc:'Calculado: receita / unidades' },
+  { id:'margem',    label:'Margem de Contribuição',icon:'📊', desc:'Calculado: (receita - despesa) / receita' },
+  { id:'ltv',       label:'LTV',                   icon:'♾️', desc:'Calculado: ticket × tempo médio (meses)' },
+  { id:'conversao', label:'Taxa de Conversão %',   icon:'🔄', desc:'Ex: % de leads convertidos' },
+];
+
+function carregarConfig() {
+  const saved = localStorage.getItem('c3x_config_v2');
+  return saved ? JSON.parse(saved) : { ccKpis: {}, ccDados: {} };
+}
+
+function salvarConfig() {
+  const config = { ccKpis: {}, ccDados: {} };
+
+  // KPIs selecionados por CC
+  document.querySelectorAll('.cc-config-block').forEach(block => {
+    const cc = block.dataset.cc;
+    config.ccKpis[cc] = [];
+    block.querySelectorAll('.kpi-check:checked').forEach(cb => {
+      config.ccKpis[cc].push(cb.value);
+    });
+    // Valores mensais
+    config.ccDados[cc] = {};
+    block.querySelectorAll('.kpi-input-row').forEach(row => {
+      const kpiId = row.dataset.kpi;
+      config.ccDados[cc][kpiId] = [];
+      row.querySelectorAll('.kpi-mes-input').forEach(inp => {
+        config.ccDados[cc][kpiId].push(parseFloat(inp.value)||0);
+      });
+    });
+  });
+
+  localStorage.setItem('c3x_config_v2', JSON.stringify(config));
+  const msg = document.getElementById('config-saved-msg');
+  msg.style.display = 'inline';
+  setTimeout(()=>msg.style.display='none', 2000);
+}
+
+function renderConfig() {
+  // Grid de tipos de KPI (informativo)
+  const tiposEl = document.getElementById('kpi-tipos-grid');
+  if (tiposEl) tiposEl.innerHTML = KPI_TIPOS.map(k=>`
+    <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:18px;margin-bottom:4px">${k.icon}</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px">${k.label}</div>
+      <div style="font-size:11px;color:var(--text2)">${k.desc}</div>
+    </div>`).join('');
+
+  const config = carregarConfig();
+  const container = document.getElementById('config-ccs-container');
+  if (!container) return;
+
+  const ccsComMovimento = Object.keys(CC_DATA).filter(cc => CC_DATA[cc].desp.some(v=>v>0));
+  
+  if (ccsComMovimento.length === 0) {
+    container.innerHTML = '<p style="color:var(--text2);font-size:13px;padding:1rem 0">Nenhum centro de custo com movimento encontrado. Atualize os dados primeiro.</p>';
+    return;
+  }
+
+  container.innerHTML = ccsComMovimento.map(cc => {
+    const kpisSel = config.ccKpis[cc] || [];
+    const dados = config.ccDados[cc] || {};
+    
+    const kpiChecks = KPI_TIPOS.filter(k=>!['cac','ticket','margem','ltv'].includes(k.id)).map(k=>`
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:6px;${kpisSel.includes(k.id)?'background:var(--green-bg);border-color:var(--green)':''}">
+        <input type="checkbox" class="kpi-check" value="${k.id}" ${kpisSel.includes(k.id)?'checked':''} onchange="toggleKpiInput(this,'${cc}')">
+        ${k.icon} ${k.label}
+      </label>`).join('');
+
+    const inputRows = KPI_TIPOS.filter(k=>!['cac','ticket','margem','ltv'].includes(k.id) && kpisSel.includes(k.id)).map(k=>{
+      const vals = dados[k.id] || Array(12).fill(0);
+      return `<div class="kpi-input-row" data-kpi="${k.id}" style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${k.icon} ${k.label}</div>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
+          ${MESES.map((m,i)=>`
+            <div>
+              <div style="font-size:10px;color:var(--text2);text-align:center;margin-bottom:2px">${m}</div>
+              <input type="number" class="kpi-mes-input" value="${vals[i]||0}" min="0" step="1"
+                style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px;text-align:center;outline:none">
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    // KPIs calculados
+    const calcKpis = ['cac','ticket','margem'].map(k=>{
+      const kpiDef = KPI_TIPOS.find(x=>x.id===k);
+      return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:#f9fafb;color:var(--text2)">
+        ${kpiDef.icon} ${kpiDef.label} <span style="font-size:10px;color:var(--green)">(automático)</span>
+      </label>`;
+    }).join('');
+
+    return `<div class="cc-config-block" data-cc="${cc}" style="border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1rem">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">📁 ${cc}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">KPIs a acompanhar</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+        ${kpiChecks}
+        ${calcKpis}
+      </div>
+      <div id="inputs-${cc.replace(/\s/g,'_')}">${inputRows}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleKpiInput(checkbox, cc) {
+  const block = checkbox.closest('.cc-config-block');
+  const ccKey = cc.replace(/\s/g,'_');
+  const inputsDiv = document.getElementById('inputs-'+ccKey);
+  const kpiId = checkbox.value;
+  const kpiDef = KPI_TIPOS.find(k=>k.id===kpiId);
+  
+  if (checkbox.checked) {
+    checkbox.closest('label').style.background = 'var(--green-bg)';
+    checkbox.closest('label').style.borderColor = 'var(--green)';
+    // Adicionar linha de inputs
+    const config = carregarConfig();
+    const vals = (config.ccDados[cc]||{})[kpiId] || Array(12).fill(0);
+    const newRow = document.createElement('div');
+    newRow.className = 'kpi-input-row';
+    newRow.dataset.kpi = kpiId;
+    newRow.style.marginBottom = '12px';
+    newRow.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${kpiDef.icon} ${kpiDef.label}</div>
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
+        ${MESES.map((m,i)=>`<div>
+          <div style="font-size:10px;color:var(--text2);text-align:center;margin-bottom:2px">${m}</div>
+          <input type="number" class="kpi-mes-input" value="${vals[i]||0}" min="0" step="1"
+            style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px;text-align:center;outline:none">
+        </div>`).join('')}
+      </div>`;
+    inputsDiv.appendChild(newRow);
+  } else {
+    checkbox.closest('label').style.background = '';
+    checkbox.closest('label').style.borderColor = '';
+    const row = inputsDiv.querySelector(`.kpi-input-row[data-kpi="${kpiId}"]`);
+    if (row) row.remove();
+  }
+}
+
 function renderServicos() {
   const [from, to] = periodoMeses();
-  const escReal=sumRange(REAL.escola,from,to), escProj=sumRange(PROJ.escola,from,to);
-  const prReal=sumRange(REAL.prime,from,to),   prProj=sumRange(PROJ.prime,from,to);
-  const dtReal=sumRange(REAL.destrava,from,to), dtProj=sumRange(PROJ.destrava,from,to);
+  const ccsComMovimento = Object.keys(CC_DATA).filter(cc => sumRange(CC_DATA[cc].desp,from,to)>0);
+  const colors = ['var(--green)','var(--blue)','var(--amber)','#8b5cf6','#ec4899','#06b6d4','#f97316','#14b8a6'];
 
-  document.getElementById('service-grid').innerHTML = `
-    <div class="service-card" onclick="goPage('escola',document.querySelector('[onclick*=escola]'))">
-      <div class="service-name">Escola de Sócios</div>
-      <div class="service-label">Receita realizada</div>
-      <div class="service-value">${fmtK(escReal)}</div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Projetado</span><span style="font-size:13px;font-weight:600">${fmtK(escProj)}</span></div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Atingimento</span><span class="badge ${escProj>0&&escReal/escProj>=0.9?'badge-green':'badge-amber'}">${escProj>0?Math.round(escReal/escProj*100):0}%</span></div>
-      <div class="progress-bg"><div class="progress-fill" style="width:${Math.min(escProj>0?escReal/escProj*100:0,100)}%;background:var(--green)"></div></div>
-    </div>
-    <div class="service-card" onclick="goPage('prime',document.querySelector('[onclick*=prime]'))">
-      <div class="service-name">Prime</div>
-      <div class="service-label">Receita realizada</div>
-      <div class="service-value">${fmtK(prReal)}</div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Projetado</span><span style="font-size:13px;font-weight:600">${fmtK(prProj)}</span></div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Atingimento</span><span class="badge ${prProj>0&&prReal/prProj>=0.9?'badge-green':'badge-amber'}">${prProj>0?Math.round(prReal/prProj*100):0}%</span></div>
-      <div class="progress-bg"><div class="progress-fill" style="width:${Math.min(prProj>0?prReal/prProj*100:0,100)}%;background:var(--blue)"></div></div>
-    </div>
-    <div class="service-card" onclick="goPage('destrava',document.querySelector('[onclick*=destrava]'))">
-      <div class="service-name">Destrava</div>
-      <div class="service-label">Receita realizada</div>
-      <div class="service-value">${fmtK(dtReal)}</div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Projetado</span><span style="font-size:13px;font-weight:600">${fmtK(dtProj)}</span></div>
-      <div class="service-row"><span style="font-size:12px;color:var(--text2)">Atingimento</span><span class="badge ${dtProj>0&&dtReal/dtProj>=0.9?'badge-green':'badge-red'}">${dtProj>0?Math.round(dtReal/dtProj*100):0}%</span></div>
-      <div class="progress-bg"><div class="progress-fill" style="width:${Math.min(dtProj>0?dtReal/dtProj*100:0,100)}%;background:var(--amber)"></div></div>
+  if (ccsComMovimento.length === 0) {
+    document.getElementById('service-grid').innerHTML = '<p style="color:var(--text2);font-size:13px">Nenhum centro de custo com movimento no período.</p>';
+    return;
+  }
+
+  document.getElementById('service-grid').innerHTML = ccsComMovimento.map((cc,idx)=>{
+    const desp = sumRange(CC_DATA[cc].desp, from, to);
+    const rec  = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
+    const res  = rec - desp;
+    const cor  = colors[idx % colors.length];
+    return `<div class="service-card" onclick="abrirCC('${cc.replace(/'/g,"\'")}')">
+      <div style="width:32px;height:4px;border-radius:2px;background:${cor};margin-bottom:12px"></div>
+      <div class="service-name">${cc}</div>
+      <div class="service-label">Despesa realizada</div>
+      <div class="service-value">${fmtK(desp)}</div>
+      ${rec>0?`<div class="service-row"><span style="font-size:12px;color:var(--text2)">Receita</span><span style="font-size:13px;font-weight:600;color:var(--green)">${fmtK(rec)}</span></div>`:''}
+      <div class="service-row">
+        <span style="font-size:12px;color:var(--text2)">Resultado</span>
+        <span class="badge ${res>=0?'badge-green':'badge-red'}">${fmtK(res)}</span>
+      </div>
     </div>`;
+  }).join('');
+}
+
+function abrirCC(cc) {
+  const [from, to] = periodoMeses();
+  const config = carregarConfig();
+  const kpisSel = config.ccKpis[cc] || [];
+  const dados = config.ccDados[cc] || {};
+
+  document.getElementById('servico-cc-title').textContent = cc;
+  document.getElementById('page-servicos-cc').dataset.cc = cc;
+
+  const desp = sumRange(CC_DATA[cc]?.desp||Array(12).fill(0), from, to);
+  const rec  = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
+  const res  = rec - desp;
+  const margem = rec > 0 ? (res/rec)*100 : 0;
+
+  // KPIs do período
+  const unidades = kpisSel.includes('unidades') ? sumRange(dados.unidades||Array(12).fill(0), from, to) : null;
+  const novos    = kpisSel.includes('novos')    ? sumRange(dados.novos||Array(12).fill(0), from, to) : null;
+  const ticket   = unidades > 0 ? rec/unidades : null;
+  const cac      = novos > 0 ? desp/novos : null;
+
+  // Montar KPIs
+  const kpisHTML = [
+    { label:'Despesa total', value:fmtFull(desp), sub:'no período', cor:'var(--red)' },
+    rec>0 ? { label:'Receita total', value:fmtFull(rec), sub:'no período', cor:'var(--green)' } : null,
+    rec>0 ? { label:'Resultado', value:fmtFull(res), sub:'receita - despesa', cor:res>=0?'var(--green)':'var(--red)' } : null,
+    rec>0 ? { label:'Margem', value:margem.toFixed(1)+'%', sub:'contribuição', cor:margem>=40?'var(--green)':'var(--amber)' } : null,
+    unidades!==null ? { label:'Unidades / Clientes', value:unidades.toString(), sub:'no período', cor:'var(--blue)' } : null,
+    novos!==null ? { label:'Novos no período', value:novos.toString(), sub:'aquisições', cor:'var(--blue)' } : null,
+    ticket!==null ? { label:'Ticket Médio', value:fmtK(ticket), sub:'receita/unidades', cor:'var(--amber)' } : null,
+    cac!==null ? { label:'CAC', value:fmtK(cac), sub:'custo por novo cliente', cor:'var(--amber)' } : null,
+  ].filter(Boolean);
+
+  document.getElementById('servico-cc-kpis').innerHTML = `
+    <style>#servico-cc-kpis{grid-template-columns:repeat(${Math.min(kpisHTML.length,4)},1fr)}</style>
+    ${kpisHTML.map(k=>`<div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="font-size:22px;color:${k.cor}">${k.value}</div>
+      <div class="kpi-sub neu">${k.sub}</div>
+    </div>`).join('')}`;
+
+  // Gráfico de despesas
+  const labels = MESES.slice(from, to+1);
+  const despMes = (CC_DATA[cc]?.desp||Array(12).fill(0)).slice(from, to+1);
+  mkChart('chartCCDesp',{type:'bar',data:{labels,datasets:[{label:'Despesa',data:despMes,backgroundColor:'rgba(239,68,68,0.7)',borderRadius:4}]},options:{...barOpts(v=>'R$'+Math.round(v/1000)+'k'),plugins:{legend:{display:false}}}});
+
+  // Gráfico KPI operacional (unidades ou novos)
+  const kpiChart = kpisSel.includes('unidades')?'unidades':kpisSel.includes('novos')?'novos':null;
+  if (kpiChart) {
+    const kpiDef = KPI_TIPOS.find(k=>k.id===kpiChart);
+    document.getElementById('chart-cc-kpi-title').textContent = kpiDef.label;
+    const kpiVals = (dados[kpiChart]||Array(12).fill(0)).slice(from, to+1);
+    mkChart('chartCCKpi',{type:'bar',data:{labels,datasets:[{label:kpiDef.label,data:kpiVals,backgroundColor:'rgba(59,130,246,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:gc.grid},ticks:{color:gc.text,font:{size:11}}},y:{grid:{color:gc.grid},ticks:{color:gc.text,font:{size:11}}}}}});
+  } else {
+    document.getElementById('chart-cc-kpi-title').textContent = 'Nenhum KPI operacional configurado';
+    if (charts['chartCCKpi']) charts['chartCCKpi'].destroy();
+  }
+
+  // Tabela de lançamentos
+  const tbody = document.getElementById('servico-cc-lancamentos');
+  const lans = (CC_DATA[cc]?.lancamentos||[]).filter(l=>{
+    const m = new Date(l.data).getMonth();
+    return m>=from && m<=to;
+  }).sort((a,b)=>new Date(b.data)-new Date(a.data));
+  tbody.innerHTML = lans.length ? lans.map(l=>`<tr>
+    <td class="td-date">${new Date(l.data).toLocaleDateString('pt-BR')}</td>
+    <td class="td-name">${l.desc}</td>
+    <td style="font-size:11px;color:var(--text2)">${l.cat}</td>
+    <td class="td-value" style="color:var(--red)">${fmtFull(Math.abs(l.valor))}</td>
+  </tr>`).join('') : '<tr><td colspan="4" class="empty">Nenhum lançamento no período</td></tr>';
+
+  // Navegar para a página
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-nav a').forEach(a=>a.classList.remove('active'));
+  document.getElementById('page-servicos-cc').classList.add('active');
 }
 
 function renderEscola() {

@@ -1012,6 +1012,10 @@ const KPI_TIPOS = [
   { id:'inadim_pct',  label:'Inadimplência %',            icon:'🚨', desc:'Calculado: inadimplência / receita × 100', tipo:'auto' },
 ];
 
+function safeId(str) {
+  return str.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
 function carregarConfig() {
   const saved = localStorage.getItem('c3x_config_v2');
   return saved ? JSON.parse(saved) : { ccKpis: {}, ccDados: {} };
@@ -1105,14 +1109,14 @@ function renderConfig() {
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${kpiChecks}</div>
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">KPIs automáticos — calculados pelo sistema</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${calcKpis}</div>
-      <div id="inputs-${cc.replace(/\s/g,'_')}">${inputRows}</div>
+      <div id="inputs-${safeId(cc)}">${inputRows}</div>
     </div>`;
   }).join('');
 }
 
 function toggleKpiInput(checkbox, cc) {
   const block = checkbox.closest('.cc-config-block');
-  const ccKey = cc.replace(/[^a-zA-Z0-9]/g,'_');
+  const ccKey = safeId(cc);
   const inputsDiv = document.getElementById('inputs-'+ccKey);
   const kpiId = checkbox.value;
   const kpiDef = KPI_TIPOS.find(k=>k.id===kpiId);

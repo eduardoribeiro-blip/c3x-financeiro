@@ -3,34 +3,36 @@ module.exports = async function handler(req, res) {
   const { token } = req.query;
   if (!token) return res.status(400).json({ error: 'token obrigatorio' });
 
-  // Buscar créditos de 2026 e inspecionar campos de status
-  const url = `https://api.nibo.com.br/empresas/v1/schedules/credit?apitoken=${token}&$orderby=dueDate&$top=10&$filter=year(dueDate) eq 2026`;
+  // Sem filtro de ano — ver estrutura real
+  const url = `https://api.nibo.com.br/empresas/v1/schedules/credit?apitoken=${token}&$orderby=dueDate desc&$top=10`;
   const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
   const data = await r.json();
 
-  // Mostrar campos relevantes dos primeiros itens
   const amostra = (data.items||[]).slice(0,5).map(i => ({
     dueDate: i.dueDate,
+    scheduleDate: i.scheduleDate,
     value: i.value,
+    openValue: i.openValue,
     isPaid: i.isPaid,
     isDue: i.isDue,
     isOverdue: i.isOverdue,
     situation: i.situation,
     status: i.status,
     paymentDate: i.paymentDate,
-    openValue: i.openValue,
-    paidValue: i.paidValue,
-    costCenters: (i.costCenters||[]).map(c=>c.costCenterDescription||c.description),
-    description: (i.description||'').substring(0,40),
+    isFlagged: i.isFlagged,
+    isEntry: i.isEntry,
+    isBill: i.isBill,
+    costCenters: (i.costCenters||[]).map(c=>c.costCenterDescription||c.description||c.name),
+    categories: (i.categories||[]).map(c=>c.categoryName||c.name),
+    description: (i.description||'').substring(0,50),
   }));
 
-  // Contar por situação
+  // Contar situações
   const situacoes = {};
   for (const item of (data.items||[])) {
-    const s = item.isPaid !== undefined ? (item.isPaid ? 'pago' : 'aberto') : 
-              item.situation || item.status || 'desconhecido';
-    situacoes[s] = (situacoes[s]||0) + 1;
+    const keys = ['isPaid','isDue','isOverdue','situation','status','isFlagged'].map(k=>`${k}:${item[k]}`).join(' | ');
+    situacoes[keys] = (situacoes[keys]||0)+1;
   }
 
-  return res.status(200).json({ total: data.items?.length, situacoes, amostra });
+  return res.status(200).json({ total: data.items?.length, amostra, situacoes });
 };

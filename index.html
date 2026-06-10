@@ -175,6 +175,24 @@ tr:hover td { background: #f9fafb; }
 /* 3-col kpi */
 .kpi-grid-3 { grid-template-columns: repeat(3, 1fr); }
 
+/* ORÇAMENTO */
+.orc-table-wrap { overflow-x: auto; margin-bottom: 1.5rem; }
+.orc-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 900px; }
+.orc-table th { padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 11px; font-weight: 600; color: var(--text2); text-align: center; background: #f9fafb; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.orc-table th.th-kpi { text-align: left; min-width: 160px; background: #f9fafb; position: sticky; left: 0; z-index: 1; }
+.orc-table th.th-mes { min-width: 70px; }
+.orc-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+.orc-table td.td-kpi-label { text-align: left; font-weight: 600; font-size: 12px; color: var(--text); background: #fafafa; position: sticky; left: 0; white-space: nowrap; padding: 8px 12px; }
+.orc-table td.td-kpi-sub { text-align: left; font-size: 11px; color: var(--text2); background: #fafafa; position: sticky; left: 0; padding: 2px 12px 6px; border-bottom: 1px solid var(--border); }
+.orc-input { width: 64px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px; font-size: 11px; text-align: center; outline: none; color: var(--text); background: white; }
+.orc-input:focus { border-color: var(--green); }
+.orc-input.realizado { background: #f0fdf8; border-color: #bbf7d0; color: #15803d; }
+.orc-input.auto { background: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-style: italic; pointer-events: none; }
+.orc-section-header td { background: var(--text); color: white; font-weight: 700; font-size: 12px; padding: 8px 12px; letter-spacing: 0.03em; }
+.orc-delta { font-size: 10px; font-weight: 600; }
+.orc-delta.pos { color: var(--green); }
+.orc-delta.neg { color: var(--red); }
+
 @media (max-width: 768px) {
   #sidebar { display: none !important; }
   #main { margin-left: 0 !important; }
@@ -248,7 +266,11 @@ tr:hover td { background: #f9fafb; }
   <div class="sidebar-nav">
     <a href="#" onclick="goPage('config',this)">
       <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a6.94 6.94 0 00-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.49.49 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-      Configurações
+      KPIs
+    </a>
+    <a href="#" onclick="goPage('orcamento',this)">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+      Orçamento
     </a>
   </div>
   <div class="sidebar-bottom">
@@ -516,8 +538,8 @@ tr:hover td { background: #f9fafb; }
   <div class="page" id="page-config">
     <div class="page-header">
       <div class="page-badge">Sistema</div>
-      <h1 class="page-title">Configurações</h1>
-      <p class="page-sub">Defina KPIs operacionais por centro de custo. Os dados ficam salvos no seu navegador.</p>
+      <h1 class="page-title">KPIs — Configurações</h1>
+      <p class="page-sub">Defina quais KPIs cada centro de custo vai acompanhar. Os dados ficam salvos no seu navegador.</p>
     </div>
 
     <!-- KPIs disponíveis -->
@@ -544,6 +566,28 @@ tr:hover td { background: #f9fafb; }
       Salvar Configurações
     </button>
     <span id="config-saved-msg" style="display:none;margin-left:12px;color:var(--green);font-size:13px">✓ Salvo!</span>
+  </div>
+
+  <!-- PAGE: ORÇAMENTO -->
+  <div class="page" id="page-orcamento">
+    <div class="page-header">
+      <div class="page-badge">Planejamento</div>
+      <h1 class="page-title">Orçamento</h1>
+      <p class="page-sub">Planejado vs Realizado por serviço — indicadores operacionais Jan a Dez 2026.</p>
+    </div>
+
+    <!-- Seletor de serviço -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--text2);font-weight:500">Serviço:</span>
+      <div id="orc-cc-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <button onclick="salvarOrcamento()" style="margin-left:auto;padding:8px 20px;background:var(--green);border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:white;cursor:pointer">
+        💾 Salvar
+      </button>
+      <span id="orc-saved-msg" style="display:none;font-size:13px;color:var(--green)">✓ Salvo!</span>
+    </div>
+
+    <!-- Tabela de orçamento -->
+    <div id="orc-container"></div>
   </div>
 
   <!-- PAGE: SERVIÇOS (dinâmico por CC) -->
@@ -771,6 +815,7 @@ function renderTudo() {
   renderProjecoes();
   renderServicos();
   renderConfig();
+  renderOrcamento();
   // Re-renderizar página de serviço se estiver aberta
   const paginaAtiva = document.querySelector('.page.active');
   if (paginaAtiva && paginaAtiva.id === 'page-servicos-cc' && CC_ATUAL) {
@@ -1231,8 +1276,15 @@ function abrirCC(cc) {
   // KPIs do período
   // Pegar valores manuais do período
   const meses = to - from + 1;
-  const getVal = (kpiId) => kpisSel.includes(kpiId) ? sumRange(dados[kpiId]||Array(12).fill(0), from, to) : null;
-  const getAvg = (kpiId) => kpisSel.includes(kpiId) ? sumRange(dados[kpiId]||Array(12).fill(0), from, to) / meses : null;
+  // Dados do painel de orçamento (Realizado preenchido pelo usuário)
+  const orcData = carregarOrcamento();
+  const ccOrcReal = (orcData[cc] || {});
+  const getOrcReal = (kpiId) => {
+    if (ccOrcReal[kpiId]) return sumRange(ccOrcReal[kpiId].real || Array(12).fill(0), from, to);
+    return sumRange((carregarConfig().ccDados[cc]||{})[kpiId]||Array(12).fill(0), from, to);
+  };
+  const getVal = (kpiId) => kpisSel.includes(kpiId) ? getOrcReal(kpiId) : null;
+  const getAvg = (kpiId) => kpisSel.includes(kpiId) ? getOrcReal(kpiId) / meses : null;
 
   const unidades  = getVal('unidades');
   const novos     = getVal('novos');
@@ -1464,6 +1516,164 @@ function sair() {
   document.getElementById('sidebar').style.display = 'none';
   document.getElementById('main').style.display = 'none';
   document.getElementById('setup-screen').style.display = 'flex';
+}
+
+/* ═══════════════════════════════════════════
+   ORÇAMENTO — PLANEJADO vs REALIZADO
+═══════════════════════════════════════════ */
+
+const ORC_KPIS = [
+  { id:'unidades',  label:'Unidades / Clientes ativos', icon:'👥', unit:'un',  autoReal: false },
+  { id:'novos',     label:'Novos no mês',               icon:'➕', unit:'un',  autoReal: false },
+  { id:'churn',     label:'Churn (cancelamentos)',      icon:'📉', unit:'un',  autoReal: false },
+  { id:'mrr',       label:'MRR (R$)',                   icon:'💵', unit:'R$',  autoReal: true,  autoDesc:'Receita Nibo' },
+  { id:'conversao', label:'Taxa de Conversão %',        icon:'🔄', unit:'%',   autoReal: false },
+  { id:'meta_rec',  label:'Meta de Receita (R$)',       icon:'🎯', unit:'R$',  autoReal: false },
+  { id:'ltv',       label:'LTV (R$)',                   icon:'♾️', unit:'R$',  autoReal: false },
+];
+
+let ORC_CC_ATIVO = null;
+
+function carregarOrcamento() {
+  const saved = localStorage.getItem('c3x_orcamento_v1');
+  return saved ? JSON.parse(saved) : {};
+}
+
+function salvarOrcamento() {
+  const data = {};
+  document.querySelectorAll('.orc-row-input').forEach(inp => {
+    const cc   = inp.dataset.cc;
+    const kpi  = inp.dataset.kpi;
+    const tipo = inp.dataset.tipo; // 'plan' ou 'real'
+    const mes  = parseInt(inp.dataset.mes);
+    if (!data[cc]) data[cc] = {};
+    if (!data[cc][kpi]) data[cc][kpi] = { plan: Array(12).fill(0), real: Array(12).fill(0) };
+    data[cc][kpi][tipo][mes] = parseFloat(inp.value) || 0;
+  });
+  localStorage.setItem('c3x_orcamento_v1', JSON.stringify(data));
+  const msg = document.getElementById('orc-saved-msg');
+  msg.style.display = 'inline';
+  setTimeout(() => msg.style.display = 'none', 2000);
+}
+
+function renderOrcamento() {
+  const ccsComMovimento = Object.keys(CC_DATA).filter(cc => CC_DATA[cc].desp.some(v => v > 0));
+  if (!ccsComMovimento.length) {
+    document.getElementById('orc-container').innerHTML = '<p style="color:var(--text2);font-size:13px">Nenhum centro de custo com movimento encontrado.</p>';
+    return;
+  }
+
+  // Chips de seleção de CC
+  if (!ORC_CC_ATIVO) ORC_CC_ATIVO = ccsComMovimento[0];
+  const chipsEl = document.getElementById('orc-cc-chips');
+  chipsEl.innerHTML = ccsComMovimento.map(cc => `
+    <button onclick="selecionarOrcCC('${cc.replace(/'/g, "\'")}',this)"
+      style="padding:6px 14px;border-radius:20px;border:1px solid ${ORC_CC_ATIVO===cc?'var(--green)':'var(--border)'};
+             background:${ORC_CC_ATIVO===cc?'var(--green)':'white'};
+             color:${ORC_CC_ATIVO===cc?'white':'var(--text2)'};
+             font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">
+      ${cc}
+    </button>`).join('');
+
+  renderOrcTabela(ORC_CC_ATIVO);
+}
+
+function selecionarOrcCC(cc, el) {
+  // Salvar antes de trocar
+  salvarOrcamento();
+  ORC_CC_ATIVO = cc;
+  renderOrcamento();
+}
+
+function renderOrcTabela(cc) {
+  const orc = carregarOrcamento();
+  const ccOrc = orc[cc] || {};
+
+  // Receita real do Nibo por mês para esse CC
+  const recNibo = CC_RECEITA[cc] || Array(12).fill(0);
+
+  // Cabeçalho
+  const mesHeaders = MESES.map(m => `<th class="th-mes">${m}</th>`).join('');
+  const mesHeadersPR = MESES.map(m => `
+    <th class="th-mes" style="background:#f0fdf8;color:#15803d">P</th>
+    <th class="th-mes" style="background:#f0f9ff;color:#0369a1">R</th>`).join('');
+
+  let rows = '';
+  for (const kpi of ORC_KPIS) {
+    const kpiData = ccOrc[kpi.id] || { plan: Array(12).fill(0), real: Array(12).fill(0) };
+
+    // Linha de inputs
+    let cellsPR = '';
+    for (let m = 0; m < 12; m++) {
+      const planVal = kpiData.plan[m] || 0;
+      const realVal = kpi.autoReal ? recNibo[m] : (kpiData.real[m] || 0);
+      const delta = planVal > 0 ? ((realVal - planVal) / planVal * 100) : null;
+      const deltaHtml = delta !== null
+        ? `<div class="orc-delta ${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%</div>`
+        : '';
+
+      cellsPR += `
+        <td style="padding:4px;min-width:70px">
+          <input type="number" class="orc-input orc-row-input"
+            data-cc="${cc}" data-kpi="${kpi.id}" data-tipo="plan" data-mes="${m}"
+            value="${planVal}" min="0" step="${kpi.unit==='%'?'0.1':'1'}"
+            title="Planejado ${MESES[m]}">
+          ${kpi.autoReal
+            ? `<input type="number" class="orc-input auto" value="${realVal.toFixed(kpi.unit==='%'?1:0)}" title="${kpi.autoDesc} ${MESES[m]}">`
+            : `<input type="number" class="orc-input realizado orc-row-input"
+                data-cc="${cc}" data-kpi="${kpi.id}" data-tipo="real" data-mes="${m}"
+                value="${realVal}" min="0" step="${kpi.unit==='%'?'0.1':'1'}"
+                title="Realizado ${MESES[m]}">`}
+          ${deltaHtml}
+        </td>`;
+    }
+
+    rows += `
+      <tr>
+        <td class="td-kpi-label">${kpi.icon} ${kpi.label} <span style="font-size:10px;color:var(--text2);font-weight:400">(${kpi.unit})</span></td>
+        ${cellsPR}
+      </tr>`;
+  }
+
+  // Linha de totais MRR (receita Nibo)
+  const totalNiboRow = `
+    <tr style="background:#f0fdf8">
+      <td class="td-kpi-label" style="background:#f0fdf8;color:#15803d">📊 Receita total Nibo <span style="font-size:10px;font-weight:400">(automático)</span></td>
+      ${MESES.map((m, i) => `<td style="padding:4px;text-align:center">
+        <div style="font-size:11px;font-weight:600;color:#15803d">${fmtK(recNibo[i])}</div>
+      </td>`).join('')}
+    </tr>`;
+
+  document.getElementById('orc-container').innerHTML = `
+    <div style="background:white;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <span style="font-size:15px;font-weight:700">📁 ${cc}</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:4px">
+          — células
+          <span style="background:#f0fdf8;color:#15803d;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #bbf7d0">P = Planejado</span>
+          <span style="background:#f0f9ff;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #bae6fd;margin-left:4px">R = Realizado</span>
+          <span style="background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid #bae6fd;margin-left:4px">Azul itálico = automático Nibo</span>
+        </span>
+      </div>
+      <div class="orc-table-wrap">
+        <table class="orc-table">
+          <thead>
+            <tr>
+              <th class="th-kpi">Indicador</th>
+              ${MESES.map(m => `<th class="th-mes" colspan="1">${m}</th>`).join('')}
+            </tr>
+            <tr>
+              <th class="th-kpi" style="font-size:10px;color:var(--text2)">Linha / P=Plan R=Real</th>
+              ${MESES.map(() => `<th class="th-mes" style="font-size:9px;color:#15803d">P&nbsp;&nbsp;&nbsp;R</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+            ${totalNiboRow}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 window.addEventListener('DOMContentLoaded', ()=>{

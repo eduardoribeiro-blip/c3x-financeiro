@@ -1091,23 +1091,14 @@ function carregarConfig() {
 function salvarConfig() {
   const config = { ccKpis: {}, ccDados: {} };
 
-  // KPIs selecionados por CC
+  // Salvar apenas seleção de KPIs — valores vêm do painel Orçamento
   document.querySelectorAll('.cc-config-block').forEach(block => {
     const cc = block.dataset.cc;
     config.ccKpis[cc] = [];
     block.querySelectorAll('.kpi-check:checked').forEach(cb => {
       config.ccKpis[cc].push(cb.value);
     });
-    // Garantir que KPIs calculados também sejam salvos
-    // Valores mensais
     config.ccDados[cc] = {};
-    block.querySelectorAll('.kpi-input-row').forEach(row => {
-      const kpiId = row.dataset.kpi;
-      config.ccDados[cc][kpiId] = [];
-      row.querySelectorAll('.kpi-mes-input').forEach(inp => {
-        config.ccDados[cc][kpiId].push(parseFloat(inp.value)||0);
-      });
-    });
   });
 
   localStorage.setItem('c3x_config_v2', JSON.stringify(config));
@@ -1150,20 +1141,7 @@ function renderConfig() {
         ${k.icon} ${k.label}
       </label>`).join('');
 
-    const inputRows = KPI_TIPOS.filter(k=>k.tipo==='manual' && kpisSel.includes(k.id)).map(k=>{
-      const vals = dados[k.id] || Array(12).fill(0);
-      return `<div class="kpi-input-row" data-kpi="${k.id}" style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${k.icon} ${k.label}</div>
-        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
-          ${MESES.map((m,i)=>`
-            <div>
-              <div style="font-size:10px;color:var(--text2);text-align:center;margin-bottom:2px">${m}</div>
-              <input type="number" class="kpi-mes-input" value="${vals[i]||0}" min="0" step="1"
-                style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px;text-align:center;outline:none">
-            </div>`).join('')}
-        </div>
-      </div>`;
-    }).join('');
+    const inputRows = ''; // inputs movidos para aba Orçamento
 
     // KPIs calculados — também opcionais
     const calcKpis = calcs.map(k=>`
@@ -1178,7 +1156,9 @@ function renderConfig() {
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${kpiChecks}</div>
       <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">KPIs calculados — opcionais, gerados automaticamente</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${calcKpis}</div>
-      <div id="inputs-${safeId(cc)}">${inputRows}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:8px;padding:8px 10px;background:#f9fafb;border-radius:6px;border:1px solid var(--border)">
+        💡 Preencha os valores mensais no painel <b>Orçamento</b>.
+      </div>
     </div>`;
   }).join('');
 }
@@ -1195,36 +1175,12 @@ function toggleKpiCalc(checkbox, cc) {
 }
 
 function toggleKpiInput(checkbox, cc) {
-  const block = checkbox.closest('.cc-config-block');
-  const ccKey = safeId(cc);
-  const inputsDiv = document.getElementById('inputs-'+ccKey);
-  const kpiId = checkbox.value;
-  const kpiDef = KPI_TIPOS.find(k=>k.id===kpiId);
-  
   if (checkbox.checked) {
     checkbox.closest('label').style.background = 'var(--green-bg)';
     checkbox.closest('label').style.borderColor = 'var(--green)';
-    // Adicionar linha de inputs
-    const config = carregarConfig();
-    const vals = (config.ccDados[cc]||{})[kpiId] || Array(12).fill(0);
-    const newRow = document.createElement('div');
-    newRow.className = 'kpi-input-row';
-    newRow.dataset.kpi = kpiId;
-    newRow.style.marginBottom = '12px';
-    newRow.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${kpiDef.icon} ${kpiDef.label}</div>
-      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
-        ${MESES.map((m,i)=>`<div>
-          <div style="font-size:10px;color:var(--text2);text-align:center;margin-bottom:2px">${m}</div>
-          <input type="number" class="kpi-mes-input" value="${vals[i]||0}" min="0" step="1"
-            style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:11px;text-align:center;outline:none">
-        </div>`).join('')}
-      </div>`;
-    inputsDiv.appendChild(newRow);
   } else {
     checkbox.closest('label').style.background = '';
     checkbox.closest('label').style.borderColor = '';
-    const row = inputsDiv.querySelector(`.kpi-input-row[data-kpi="${kpiId}"]`);
-    if (row) row.remove();
   }
 }
 

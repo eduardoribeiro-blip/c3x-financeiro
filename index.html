@@ -1145,17 +1145,15 @@ function renderConfig() {
 
     // KPIs calculados — também opcionais
     const calcKpis = calcs.map(k=>`
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:6px;${kpisSel.includes(k.id)?'background:#eff6ff;border-color:var(--blue)':''}">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:6px;${kpisSel.includes(k.id)?'background:var(--green-bg);border-color:var(--green)':''}">
         <input type="checkbox" class="kpi-check" value="${k.id}" ${kpisSel.includes(k.id)?'checked':''} onchange="toggleKpiCalc(this,'${cc}')">
-        ${k.icon} ${k.label} <span style="font-size:10px;color:var(--blue)">(calculado)</span>
+        ${k.icon} ${k.label}
       </label>`).join('');
 
     return `<div class="cc-config-block" data-cc="${cc}" style="border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1rem">
       <div style="font-size:15px;font-weight:700;margin-bottom:12px">📁 ${cc}</div>
-      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">KPIs de entrada — você preenche mensalmente</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${kpiChecks}</div>
-      <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">KPIs calculados — opcionais, gerados automaticamente</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${calcKpis}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Selecione os KPIs que deseja acompanhar</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">${kpiChecks}${calcKpis}</div>
       <div style="font-size:11px;color:var(--text2);margin-top:8px;padding:8px 10px;background:#f9fafb;border-radius:6px;border:1px solid var(--border)">
         💡 Preencha os valores mensais no painel <b>Orçamento</b>.
       </div>

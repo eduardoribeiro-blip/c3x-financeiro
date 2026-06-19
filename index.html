@@ -811,9 +811,6 @@ async function carregarNibo() {
     }));
   }
 
-  // Classificadores de débitos especiais
-  // Dedução de receita: comissões que reduzem a receita bruta (não são despesa operacional)
-  const ehDeducaoReceita = cat => /dedução da receita|deducao da receita/i.test(cat);
   // Investimentos/distribuições: não entram no Resultado Operacional
   const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
 
@@ -830,24 +827,13 @@ async function carregarNibo() {
 
     const cat = item.categories?.[0]?.categoryName || item.categoryName || 'Outros';
 
-    if (ehDeducaoReceita(cat)) {
-      // Comissão: subtrai da receita bruta → receita líquida igual ao Nibo
-      REAL.receita[m] -= v;
-      const catL = cat.toLowerCase();
-      if (catL.includes('escola') || catL.includes('sócio')) REAL.escola[m] -= v;
-      else if (catL.includes('prime')) REAL.prime[m] -= v;
-      else if (catL.includes('destrava')) REAL.destrava[m] -= v;
-      // Mantém em REAL.categorias para comparação com PROJ_CAT
-      if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
-      REAL.categorias[cat][m] += v;
-    } else {
-      // Despesa normal: registra em categoria
-      if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
-      REAL.categorias[cat][m] += v;
-      // Soma no resultado operacional apenas se for despesa operacional (não investimento)
-      if (!ehInvestimento(cat)) {
-        REAL.despesa[m] += v;
-      }
+    // Registra em categoria (para comparação com PROJ_CAT)
+    if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
+    REAL.categorias[cat][m] += v;
+
+    // Soma no resultado operacional apenas se for despesa operacional (não investimento)
+    if (!ehInvestimento(cat)) {
+      REAL.despesa[m] += v;
     }
   }
 

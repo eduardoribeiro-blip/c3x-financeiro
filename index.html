@@ -785,17 +785,20 @@ async function carregarNibo() {
     const v = Math.abs(item.value||0);
     REAL.receita[m] += v;
 
-    // Por categoria de receita (Escola, Prime, Destrava)
+    // Por categoria de receita (Escola, Prime, Eventos, Clube dos Sócios, C3X)
     const cat = item.categories?.[0]?.categoryName || item.categoryName || '';
+    const catL = cat.toLowerCase();
     const desc = (item.description||'').toLowerCase();
     const stake = (item.stakeholder?.name||'').toLowerCase();
-    if (cat.toLowerCase().includes('escola') || desc.includes('escola') || cat.toLowerCase().includes('sócio')) {
+    // "Escola de Sócios" — exclui "Clube dos Sócios" para não colidir
+    if ((catL.includes('escola') || desc.includes('escola de sócio')) && !catL.includes('clube')) {
       REAL.escola[m] += v;
-    } else if (cat.toLowerCase().includes('prime') || desc.includes('prime') || cat.toLowerCase().includes('mentoria c3x') || stake.includes('prime')) {
+    } else if (catL.includes('prime') || desc.includes('prime') || catL.includes('mentoria c3x') || stake.includes('prime')) {
       REAL.prime[m] += v;
-    } else if (cat.toLowerCase().includes('destrava') || desc.includes('destrava')) {
+    } else if (catL.includes('destrava') || desc.includes('destrava') || catL.includes('fora do cardápio') || catL.includes('summit') || catL.includes('evento')) {
       REAL.destrava[m] += v;
     }
+    // Clube dos Sócios, C3X, Juros — somam apenas na receita total
   }
 
   // Log do primeiro débito para diagnóstico de campos
@@ -803,12 +806,18 @@ async function carregarNibo() {
     const ex = debitData.items[0];
     console.log('[Nibo] Exemplo de débito:', JSON.stringify({
       isPaid: ex.isPaid, openValue: ex.openValue, value: ex.value,
-      paymentDate: ex.paymentDate, dueDate: ex.dueDate, status: ex.status
+      paymentDate: ex.paymentDate, dueDate: ex.dueDate,
+      category: ex.categories?.[0]?.categoryName || ex.categoryName
     }));
   }
 
+  // Classificadores de débitos especiais
+  // Dedução de receita: comissões que reduzem a receita bruta (não são despesa operacional)
+  const ehDeducaoReceita = cat => /dedução da receita|deducao da receita/i.test(cat);
+  // Investimentos/distribuições: não entram no Resultado Operacional
+  const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
+
   // REGIME DE CAIXA: despesas — contar apenas o que foi efetivamente pago
-  // isPaid=true OU openValue=0 (totalmente quitado)
   for (const item of (debitData.items||[])) {
     const pago = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
     if (!pago) continue;
@@ -818,13 +827,37 @@ async function carregarNibo() {
     if (dt.getFullYear()!==2026) continue;
     const m = dt.getMonth();
     const v = Math.abs(item.value||0);
-    REAL.despesa[m] += v;
 
-    // Categoria
     const cat = item.categories?.[0]?.categoryName || item.categoryName || 'Outros';
-    if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
-    REAL.categorias[cat][m] += v;
+
+    if (ehDeducaoReceita(cat)) {
+      // Comissão: subtrai da receita bruta → receita líquida igual ao Nibo
+      REAL.receita[m] -= v;
+      const catL = cat.toLowerCase();
+      if (catL.includes('escola') || catL.includes('sócio')) REAL.escola[m] -= v;
+      else if (catL.includes('prime')) REAL.prime[m] -= v;
+      else if (catL.includes('destrava')) REAL.destrava[m] -= v;
+      // Mantém em REAL.categorias para comparação com PROJ_CAT
+      if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
+      REAL.categorias[cat][m] += v;
+    } else {
+      // Despesa normal: registra em categoria
+      if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
+      REAL.categorias[cat][m] += v;
+      // Soma no resultado operacional apenas se for despesa operacional (não investimento)
+      if (!ehInvestimento(cat)) {
+        REAL.despesa[m] += v;
+      }
+    }
   }
+
+  // Log para diagnóstico de categorias encontradas
+  const topCats = Object.entries(REAL.categorias)
+    .map(([c,vals])=>[c, vals.reduce((a,b)=>a+b,0)])
+    .sort((a,b)=>b[1]-a[1]).slice(0,12);
+  console.log('[Nibo] Top categorias débito:', topCats.map(([c,v])=>`${c}: ${v.toFixed(0)}`).join(' | '));
+  console.log('[Nibo] REAL receita Jan-Jun:', REAL.receita.slice(0,6).map(v=>v.toFixed(0)).join(', '));
+  console.log('[Nibo] REAL despesa Jan-Jun:', REAL.despesa.slice(0,6).map(v=>v.toFixed(0)).join(', '));
 
   // Resultado
   for (let i=0;i<12;i++) REAL.resultado[i] = REAL.receita[i] - REAL.despesa[i];

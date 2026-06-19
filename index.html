@@ -737,12 +737,17 @@ async function niboGet(endpoint, extra={}) {
 async function carregarNibo() {
   document.getElementById('loader-label').textContent = 'Buscando dados do Nibo...';
 
-  // Buscar ambos endpoints em paralelo — filtro ampliado para pegar pagamentos
-  // feitos em 2026 com vencimento em 2025 (regime de caixa correto)
+  // Buscar ambos endpoints em paralelo
   const [creditData, debitData] = await Promise.all([
-    niboGet('schedules/credit', {'$orderby':'dueDate','$top':'1000','$filter':'year(dueDate) ge 2025'}),
-    niboGet('schedules/debit',  {'$orderby':'dueDate','$top':'1000','$filter':'year(dueDate) ge 2025'})
+    niboGet('schedules/credit', {'$orderby':'dueDate','$top':'1000','$filter':'year(dueDate) eq 2026'}),
+    niboGet('schedules/debit',  {'$orderby':'dueDate','$top':'1000','$filter':'year(dueDate) eq 2026'})
   ]);
+
+  // Diagnóstico no console para verificar o que a API retorna
+  console.log('[Nibo] Créditos recebidos:', creditData.items?.length ?? 'ERRO', creditData.error ?? '');
+  console.log('[Nibo] Débitos recebidos:', debitData.items?.length ?? 'ERRO', debitData.error ?? '');
+  console.log('[Nibo] Créditos pagos:', (creditData.items||[]).filter(i=>i.isPaid).length);
+  console.log('[Nibo] Débitos pagos:', (debitData.items||[]).filter(i=>i.isPaid).length);
 
   document.getElementById('loader-label').textContent = 'Processando centros de custo...';
   await carregarCentrosCusto(creditData, debitData);
@@ -778,9 +783,20 @@ async function carregarNibo() {
     }
   }
 
+  // Log do primeiro débito para diagnóstico de campos
+  if (debitData.items?.length > 0) {
+    const ex = debitData.items[0];
+    console.log('[Nibo] Exemplo de débito:', JSON.stringify({
+      isPaid: ex.isPaid, openValue: ex.openValue, value: ex.value,
+      paymentDate: ex.paymentDate, dueDate: ex.dueDate, status: ex.status
+    }));
+  }
+
   // REGIME DE CAIXA: despesas — contar apenas o que foi efetivamente pago
+  // isPaid=true OU openValue=0 (totalmente quitado)
   for (const item of (debitData.items||[])) {
-    if (!item.isPaid) continue; // ignorar não pagos
+    const pago = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
+    if (!pago) continue;
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
     const dt = new Date(d);
@@ -1001,9 +1017,10 @@ async function carregarCentrosCusto(creditData, debitData) {
   CC_DATA = {};
   CC_RECEITA = {};
 
-  // Despesas por CC — REGIME DE CAIXA: apenas isPaid=true
+  // Despesas por CC — REGIME DE CAIXA: isPaid=true ou openValue=0
   for (const item of (debitData.items||[])) {
-    if (!item.isPaid) continue; // ignorar não pagos
+    const pago = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
+    if (!pago) continue;
     const ccs = item.costCenters || [];
     if (ccs.length === 0) continue;
     const payDate = new Date(item.paymentDate || item.dueDate);

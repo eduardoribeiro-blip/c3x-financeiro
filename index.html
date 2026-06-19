@@ -1218,7 +1218,7 @@ function renderServicos() {
     const rec  = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
     const res  = rec - desp;
     const cor  = colors[idx % colors.length];
-    return `<div class="service-card" onclick="abrirCC(${JSON.stringify(cc)})">`
+    return `<div class="service-card" onclick="abrirCC(${JSON.stringify(cc)})">
       <div style="width:32px;height:4px;border-radius:2px;background:${cor};margin-bottom:12px"></div>
       <div class="service-name">${cc}</div>
       <div class="service-label">Despesa realizada</div>

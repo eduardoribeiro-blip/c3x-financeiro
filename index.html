@@ -765,22 +765,6 @@ async function carregarNibo() {
   const creditData = await niboGetAll('schedules/credit', filtro);
   RAW_CREDITS = creditData.items || [];
 
-  // Tenta buscar itens pagos em 2026 com dueDate em outros anos (regime de caixa real)
-  let extraCredits = [];
-  try {
-    const extraData = await niboGetAll('schedules/credit', {
-      '$orderby': 'paymentDate',
-      '$filter': 'isPaid eq true and year(paymentDate) eq 2026'
-    });
-    const idsSelecionados = new Set(creditData.items.map(i => i.scheduleId || i.id));
-    extraCredits = (extraData.items || []).filter(i => !idsSelecionados.has(i.scheduleId || i.id));
-    console.log('[Nibo] Créditos extras via paymentDate 2026:', extraCredits.length,
-      '| ex:', extraCredits[0] ? `${extraCredits[0].description} due=${extraCredits[0].dueDate} pay=${extraCredits[0].paymentDate}` : 'nenhum');
-  } catch(e) {
-    console.warn('[Nibo] filtro paymentDate não suportado:', e.message);
-  }
-  creditData.items = creditData.items.concat(extraCredits);
-
   loaderEl.textContent = 'Buscando despesas...';
   const debitData = await niboGetAll('schedules/debit', filtro);
 
@@ -797,7 +781,8 @@ async function carregarNibo() {
   REAL.despesa  = Array(12).fill(0);
   REAL.categorias = {};
 
-  // REGIME DE CAIXA: conta o valor efetivamente recebido
+  // REGIME DE CAIXA: data de recebimento = updateDate (quando foi marcado como pago no Nibo)
+  // A API schedules não retorna paymentDate confiável; updateDate reflete o registro do recebimento.
   // isPaid=true → value inteiro; senão → value - openValue (parcialmente recebido)
   let _cSkipNaoPago=0, _cSkipAno=0, _cContado=0;
   for (const item of (creditData.items||[])) {
@@ -806,7 +791,10 @@ async function carregarNibo() {
       ? Math.abs(item.value||0)
       : Math.abs(item.value||0) - Math.abs(item.openValue||0);
     if (v <= 0) { _cSkipNaoPago++; continue; }
-    const d = item.paymentDate || item.dueDate || item.scheduleDate;
+    // Regime de caixa: usa updateDate (data do registro do pagamento) para isPaid=true
+    const d = isPaidTrue
+      ? (item.updateDate || item.dueDate || item.scheduleDate)
+      : (item.dueDate || item.scheduleDate);
     if (!d) continue;
     const dt = new Date(d);
     if (dt.getFullYear()!==2026) { _cSkipAno++; continue; }
@@ -830,27 +818,16 @@ async function carregarNibo() {
     // Clube dos Sócios, C3X, Juros — somam apenas na receita total
   }
 
-  // === INSPECIONA CAMPOS COMPLETOS DOS ITENS-PROBLEMA ===
-  const _problemStakes = ['tus universal','maxwell lavigne'];
-  const _inspecionar = (creditData.items||[]).filter(i =>
-    _problemStakes.some(s => (i.stakeholder?.name||'').toLowerCase().includes(s))
-  );
-  if (_inspecionar.length) {
-    console.log('\n=== CAMPOS COMPLETOS (TUS UNIVERSAL + MAXWELL) ===');
-    _inspecionar.forEach(i => {
-      console.log(`--- ${i.stakeholder?.name} | ${i.description} | value=${i.value} | dueDate=${i.dueDate}`);
-      console.log(JSON.stringify(i, null, 2));
-    });
-  }
-  // === FIM INSPEÇÃO ===
-
   // === DIAGNÓSTICO JANEIRO — aparece no console (F12) após carregar ===
   const _janItems = (creditData.items||[]).map(item => {
     const isPaidTrue = item.isPaid === true;
     const value     = Math.abs(item.value||0);
     const openValue = Math.abs(item.openValue||0);
     const v = isPaidTrue ? value : value - openValue;
-    const dateUsed  = item.paymentDate || item.dueDate || item.scheduleDate || '';
+    // Mesma lógica do loop principal: updateDate para pagos, dueDate para não pagos
+    const dateUsed = isPaidTrue
+      ? (item.updateDate || item.dueDate || item.scheduleDate || '')
+      : (item.dueDate || item.scheduleDate || '');
     const dt = dateUsed ? new Date(dateUsed) : null;
     const conta = v > 0 && dt && dt.getFullYear()===2026 && dt.getMonth()===0;
     return {
@@ -878,11 +855,13 @@ async function carregarNibo() {
   // Investimentos/distribuições: não entram no Resultado Operacional
   const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
 
-  // REGIME DE CAIXA: despesas — contar apenas o que foi efetivamente pago
+  // REGIME DE CAIXA: despesas — usa updateDate como data de pagamento real
   for (const item of (debitData.items||[])) {
     const pago = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
     if (!pago) continue;
-    const d = item.paymentDate || item.dueDate || item.scheduleDate;
+    const d = item.isPaid === true
+      ? (item.updateDate || item.dueDate || item.scheduleDate)
+      : (item.dueDate || item.scheduleDate);
     if (!d) continue;
     const dt = new Date(d);
     if (dt.getFullYear()!==2026) continue;

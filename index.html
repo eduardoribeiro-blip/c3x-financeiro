@@ -752,7 +752,9 @@ async function niboGetAll(endpoint, params={}) {
 ═══════════════════════════════════════════ */
 async function carregarNibo() {
   const loaderEl = document.getElementById('loader-label');
-  const filtro = {'$orderby':'dueDate','$filter':'year(dueDate) eq 2026'};
+  // Busca dueDate 2025 e 2026 para capturar itens vencidos em dez/2025 mas pagos em 2026
+  // A filtragem por paymentDate=2026 é feita no cliente (regime de caixa)
+  const filtro = {'$orderby':'dueDate','$filter':'(year(dueDate) eq 2026 or year(dueDate) eq 2025)'};
 
   loaderEl.textContent = 'Buscando receitas...';
   const creditData = await niboGetAll('schedules/credit', filtro);
@@ -774,16 +776,15 @@ async function carregarNibo() {
   REAL.categorias = {};
 
   // REGIME DE CAIXA: contar apenas o que foi efetivamente pago (isPaid=true)
-  // Itens com value < 0 em schedules/credit são deduções (comissões) — ignorar para
-  // não inflar REAL.receita com Math.abs() de valores negativos
+  // Filtrar pelo paymentDate (regime de caixa), não pelo dueDate
   for (const item of (creditData.items||[])) {
     if (!item.isPaid) continue;
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
     const dt = new Date(d);
     if (dt.getFullYear()!==2026) continue;
-    const v = item.value || 0;
-    if (v <= 0) continue; // pula deduções/estornos (valor negativo no crédito)
+    const v = Math.abs(item.value||0);
+    if (!v) continue;
     const m = dt.getMonth();
     REAL.receita[m] += v;
 

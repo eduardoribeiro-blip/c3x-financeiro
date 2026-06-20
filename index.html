@@ -830,6 +830,20 @@ async function carregarNibo() {
     // Clube dos Sócios, C3X, Juros — somam apenas na receita total
   }
 
+  // === INSPECIONA CAMPOS COMPLETOS DOS ITENS-PROBLEMA ===
+  const _problemStakes = ['tus universal','maxwell lavigne'];
+  const _inspecionar = (creditData.items||[]).filter(i =>
+    _problemStakes.some(s => (i.stakeholder?.name||'').toLowerCase().includes(s))
+  );
+  if (_inspecionar.length) {
+    console.log('\n=== CAMPOS COMPLETOS (TUS UNIVERSAL + MAXWELL) ===');
+    _inspecionar.forEach(i => {
+      console.log(`--- ${i.stakeholder?.name} | ${i.description} | value=${i.value} | dueDate=${i.dueDate}`);
+      console.log(JSON.stringify(i, null, 2));
+    });
+  }
+  // === FIM INSPEÇÃO ===
+
   // === DIAGNÓSTICO JANEIRO — aparece no console (F12) após carregar ===
   const _janItems = (creditData.items||[]).map(item => {
     const isPaidTrue = item.isPaid === true;

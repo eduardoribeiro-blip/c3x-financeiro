@@ -774,15 +774,17 @@ async function carregarNibo() {
   REAL.categorias = {};
 
   // REGIME DE CAIXA: contar apenas o que foi efetivamente pago (isPaid=true)
-  // Usar paymentDate se disponível, senão dueDate como fallback
+  // Itens com value < 0 em schedules/credit são deduções (comissões) — ignorar para
+  // não inflar REAL.receita com Math.abs() de valores negativos
   for (const item of (creditData.items||[])) {
-    if (!item.isPaid) continue; // ignorar não recebidos
+    if (!item.isPaid) continue;
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
     const dt = new Date(d);
     if (dt.getFullYear()!==2026) continue;
+    const v = item.value || 0;
+    if (v <= 0) continue; // pula deduções/estornos (valor negativo no crédito)
     const m = dt.getMonth();
-    const v = Math.abs(item.value||0);
     REAL.receita[m] += v;
 
     // Por categoria de receita (Escola, Prime, Eventos, Clube dos Sócios, C3X)
@@ -813,9 +815,6 @@ async function carregarNibo() {
 
   // Investimentos/distribuições: não entram no Resultado Operacional
   const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
-  // Deduções de receita (comissões): reduzem receita bruta → receita líquida igual ao Nibo
-  // Não entram em REAL.despesa para não distorcer o resultado (já é abatido na receita)
-  const ehDeducaoReceita = cat => /dedução da receita|deducao da receita/i.test(cat);
 
   // REGIME DE CAIXA: despesas — contar apenas o que foi efetivamente pago
   for (const item of (debitData.items||[])) {
@@ -834,15 +833,8 @@ async function carregarNibo() {
     if (!REAL.categorias[cat]) REAL.categorias[cat] = Array(12).fill(0);
     REAL.categorias[cat][m] += v;
 
-    if (ehDeducaoReceita(cat)) {
-      // Abate da receita bruta para exibir receita líquida (igual ao painel Nibo)
-      REAL.receita[m] -= v;
-      const catL = cat.toLowerCase();
-      if (catL.includes('escola') || catL.includes('sócio')) REAL.escola[m] -= v;
-      else if (catL.includes('prime')) REAL.prime[m] -= v;
-      else if (catL.includes('destrava')) REAL.destrava[m] -= v;
-    } else if (!ehInvestimento(cat)) {
-      // Despesa operacional normal
+    // Soma no resultado operacional apenas se for despesa operacional (não investimento)
+    if (!ehInvestimento(cat)) {
       REAL.despesa[m] += v;
     }
     // Investimentos (Adiantamento de Lucros etc.) ficam só em REAL.categorias

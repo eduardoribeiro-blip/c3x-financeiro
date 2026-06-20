@@ -5,47 +5,42 @@ module.exports = async function handler(req, res) {
 
   const base = `https://api.nibo.com.br/empresas/v1`;
   const h = { 'Accept': 'application/json' };
+  const tk = `apitoken=${token}`;
 
-  async function nibo(path) {
-    const r = await fetch(`${base}${path}&apitoken=${token}`, { headers: h });
-    return { status: r.status, data: await r.json() };
+  async function nibo(endpoint, filter) {
+    const url = `${base}/${endpoint}?${tk}&$top=500&$filter=${encodeURIComponent(filter)}`;
+    const r = await fetch(url, { headers: h });
+    const data = await r.json();
+    return { status: r.status, items: data.items || [], erro: data.message || null };
   }
 
   try {
     const results = {};
 
-    // ABORDAGEM A: filtro por dueDate (atual)
-    const a = await nibo(`/schedules/credit?$top=500&$filter=isPaid eq true AND year(dueDate) eq 2026 AND month(dueDate) eq 1`);
+    // A: filtro atual por dueDate janeiro — deve retornar o que já conhecemos
+    const a = await nibo('schedules/credit', 'year(dueDate) eq 2026 AND month(dueDate) eq 1');
     results.A_dueDate_jan = {
-      status: a.status,
-      total: (a.data.items||[]).reduce((s,i) => s + Math.abs(i.value||0), 0).toFixed(2),
-      qtd: a.data.items?.length,
+      status: a.status, qtd: a.items.length, erro: a.erro,
+      total_pago: a.items.filter(i=>i.isPaid).reduce((s,i)=>s+Math.abs(i.value||0),0).toFixed(2),
+      total_value_minus_open: a.items.reduce((s,i)=>s+Math.max(0,Math.abs(i.value||0)-Math.abs(i.openValue||0)),0).toFixed(2),
     };
 
-    // ABORDAGEM B: filtro por paymentDate (teste — pode não funcionar)
-    const b = await nibo(`/schedules/credit?$top=500&$filter=isPaid eq true AND year(paymentDate) eq 2026 AND month(paymentDate) eq 1`);
+    // B: filtro por paymentDate — testa se Nibo suporta
+    const b = await nibo('schedules/credit', 'isPaid eq true AND year(paymentDate) eq 2026 AND month(paymentDate) eq 1');
     results.B_paymentDate_jan = {
-      status: b.status,
-      total: (b.data.items||[]).reduce((s,i) => s + Math.abs(i.value||0), 0).toFixed(2),
-      qtd: b.data.items?.length,
-      erro: b.data.message || null,
+      status: b.status, qtd: b.items.length, erro: b.erro,
+      total: b.items.reduce((s,i)=>s+Math.abs(i.value||0),0).toFixed(2),
     };
 
-    // ABORDAGEM C: todos isPaid=true de 2026 sem filtro de mês, agrupados por paymentDate
-    const c = await nibo(`/schedules/credit?$top=500&$filter=isPaid eq true AND year(dueDate) eq 2026`);
-    const porMes = Array(12).fill(0);
-    const porMesPay = Array(12).fill(0);
-    for (const item of (c.data.items||[])) {
-      const v = Math.abs(item.value||0);
-      if (item.dueDate) porMes[new Date(item.dueDate).getMonth()] += v;
-      if (item.paymentDate) porMesPay[new Date(item.paymentDate).getMonth()] += v;
-    }
-    results.C_pago2026 = {
-      qtd: c.data.items?.length,
-      comPaymentDate: (c.data.items||[]).filter(i=>i.paymentDate).length,
-      semPaymentDate: (c.data.items||[]).filter(i=>!i.paymentDate).length,
-      totalPorDueDate_jan: porMes[0].toFixed(2),
-      totalPorPaymentDate_jan: porMesPay[0].toFixed(2),
+    // C: todos de 2026 pagos — quantos têm paymentDate preenchido?
+    const c = await nibo('schedules/credit', 'isPaid eq true AND year(dueDate) eq 2026');
+    const comPay = c.items.filter(i=>i.paymentDate);
+    const semPay = c.items.filter(i=>!i.paymentDate);
+    results.C_pagos2026 = {
+      status: c.status, qtd: c.items.length, erro: c.erro,
+      comPaymentDate: comPay.length,
+      semPaymentDate: semPay.length,
+      exemploComPaymentDate: comPay[0] ? { desc: comPay[0].description, dueDate: comPay[0].dueDate, paymentDate: comPay[0].paymentDate, value: comPay[0].value } : null,
     };
 
     return res.status(200).json(results);

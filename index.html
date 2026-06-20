@@ -669,21 +669,10 @@ const PROJ_CAT = {
 ═══════════════════════════════════════════ */
 let RAW_CREDITS = [];
 
-// Regime de caixa: data real de recebimento de um crédito.
-// O Nibo não expõe paymentDate para itens pagos via Asaas no endpoint schedules/credit.
-// Estratégia: max(dueDate, updateDate).
-//   • Pago em dia (updateDate = criação < dueDate) → usa dueDate ✓
-//   • Pago em atraso (updateDate = registro > dueDate) → usa updateDate ✓
-//   • isEntry=true (lançamento bancário real) → dueDate = data do crédito ✓
+// Regime de caixa: data de recebimento. paymentDate tem prioridade; fallback para dueDate.
 function _dataCaixa(item) {
   if (item.isEntry === true) return item.dueDate || item.scheduleDate || '';
-  if (item.isPaid === true) {
-    if (item.paymentDate) return item.paymentDate;
-    const due    = item.dueDate    ? new Date(item.dueDate)    : null;
-    const update = item.updateDate ? new Date(item.updateDate) : null;
-    if (due && update) return due >= update ? item.dueDate : item.updateDate;
-    return item.dueDate || item.updateDate || item.scheduleDate || '';
-  }
+  if (item.isPaid === true) return item.paymentDate || item.dueDate || item.scheduleDate || '';
   return item.dueDate || item.scheduleDate || '';
 }
 
@@ -789,6 +778,54 @@ async function carregarNibo() {
   console.log('[Nibo] Total créditos:', creditData.items.length, '| pagos:', creditData.items.filter(i=>i.isPaid).length);
   console.log('[Nibo] Total débitos:', debitData.items.length, '| pagos:', debitData.items.filter(i=>i.isPaid).length);
   loaderEl.textContent = 'Processando...';
+
+  // === DIAGNÓSTICO: descobrir endpoint correto para data de pagamento ===
+  // Roda em background para não atrasar o dashboard
+  (async () => {
+    try {
+      // 1. Ver TODOS os campos de 2 itens pagos (procurar campo de data real)
+      const pagoAsaas = (creditData.items||[]).find(i => i.isPaid === true && !i.isEntry && !i.paymentDate);
+      const pagoManual = (creditData.items||[]).find(i => i.isPaid === true && !i.isEntry && i.paymentDate);
+      console.group('[Diagnóstico Nibo] Campos disponíveis nos itens');
+      if (pagoAsaas)  { console.log('Item pago via Asaas (sem paymentDate):'); console.log(JSON.parse(JSON.stringify(pagoAsaas))); }
+      if (pagoManual) { console.log('Item pago com paymentDate:');             console.log(JSON.parse(JSON.stringify(pagoManual))); }
+      console.groupEnd();
+
+      // 2. Listar contas bancárias
+      const accR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=accounts`);
+      const accD = await accR.json();
+      console.group('[Diagnóstico Nibo] Contas bancárias');
+      console.table((accD.items||[]).map(a => ({ id: a.accountId||a.id, nome: a.name||a.description, tipo: a.accountType||a.type, saldo: a.balance })));
+      console.groupEnd();
+
+      // 3. Testar endpoint de lançamentos da conta (entries)
+      const firstAcc = (accD.items||[])[0];
+      if (firstAcc) {
+        const accId = firstAcc.accountId || firstAcc.id;
+        const entR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('accounts/'+accId+'/entries')}&%24top=3`);
+        const entD = await entR.json();
+        console.group('[Diagnóstico Nibo] Entradas da primeira conta (3 itens)');
+        console.log('Conta:', firstAcc.name||firstAcc.description, '| Status:', entR.status);
+        if (entD.items?.length) console.log(JSON.parse(JSON.stringify(entD.items[0])));
+        else console.log(entD);
+        console.groupEnd();
+      }
+
+      // 4. Testar endpoint de recibos de um agendamento específico
+      if (pagoAsaas) {
+        const sid = pagoAsaas.scheduleId || pagoAsaas.id;
+        const recR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('schedules/credit/'+sid+'/receipts')}`);
+        const recD = await recR.json();
+        console.group('[Diagnóstico Nibo] Recibos de um agendamento pago');
+        console.log('ScheduleId:', sid, '| Status:', recR.status);
+        console.log(recD);
+        console.groupEnd();
+      }
+    } catch(e) {
+      console.warn('[Diagnóstico Nibo] Erro:', e.message);
+    }
+  })();
+  // === FIM DIAGNÓSTICO ===
 
   document.getElementById('loader-label').textContent = 'Processando centros de custo...';
   await carregarCentrosCusto(creditData, debitData);

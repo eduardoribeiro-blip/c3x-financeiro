@@ -752,9 +752,9 @@ async function niboGetAll(endpoint, params={}) {
 ═══════════════════════════════════════════ */
 async function carregarNibo() {
   const loaderEl = document.getElementById('loader-label');
-  // Busca dueDate 2025 e 2026 para capturar itens vencidos em dez/2025 mas pagos em 2026
+  // Inclui dueDate 2024-2026: itens de anos anteriores podem ser pagos em 2026
   // A filtragem por paymentDate=2026 é feita no cliente (regime de caixa)
-  const filtro = {'$orderby':'dueDate','$filter':'(year(dueDate) eq 2026 or year(dueDate) eq 2025)'};
+  const filtro = {'$orderby':'dueDate','$filter':'(year(dueDate) eq 2026 or year(dueDate) eq 2025 or year(dueDate) eq 2024)'};
 
   loaderEl.textContent = 'Buscando receitas...';
   const creditData = await niboGetAll('schedules/credit', filtro);
@@ -778,13 +778,20 @@ async function carregarNibo() {
   // REGIME DE CAIXA: conta o valor efetivamente recebido = value - openValue
   // Cobre: pagamento total (openValue=0), parcial (openValue<value), e isPaid=true
   let _cSkipNaoPago=0, _cSkipAno=0, _cContado=0;
+  const _cAmostraExcluidos=[];
   for (const item of (creditData.items||[])) {
     const v = Math.abs(item.value||0) - Math.abs(item.openValue||0);
     if (v <= 0) { _cSkipNaoPago++; continue; } // nada recebido ainda
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
     const dt = new Date(d);
-    if (dt.getFullYear()!==2026) { _cSkipAno++; continue; }
+    if (dt.getFullYear()!==2026) {
+      _cSkipAno++;
+      if (_cAmostraExcluidos.length < 8) _cAmostraExcluidos.push(
+        `v=${v.toFixed(2)} pay=${item.paymentDate||'null'} due=${item.dueDate} cat=${item.categories?.[0]?.categoryName||''}`
+      );
+      continue;
+    }
     _cContado++;
     const m = dt.getMonth();
     REAL.receita[m] += v;
@@ -805,6 +812,7 @@ async function carregarNibo() {
     // Clube dos Sócios, C3X, Juros — somam apenas na receita total
   }
   console.log('[Créditos] Contados:', _cContado, '| Sem valor recebido:', _cSkipNaoPago, '| Ano≠2026:', _cSkipAno);
+  if (_cAmostraExcluidos.length) console.log('[Créditos excluídos por ano]', _cAmostraExcluidos.join('\n'));
 
   // Log do primeiro débito para diagnóstico de campos
   if (debitData.items?.length > 0) {

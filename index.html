@@ -775,10 +775,11 @@ async function carregarNibo() {
   REAL.despesa  = Array(12).fill(0);
   REAL.categorias = {};
 
-  // REGIME DE CAIXA: contar apenas o que foi efetivamente pago (isPaid=true)
-  // Filtrar pelo paymentDate (regime de caixa), não pelo dueDate
+  // REGIME DE CAIXA: contar apenas o que foi efetivamente recebido
+  // isPaid=true OU openValue=0 (quitado, mesmo sem o flag setPago)
   for (const item of (creditData.items||[])) {
-    if (!item.isPaid) continue;
+    const recebido = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
+    if (!recebido) continue;
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
     const dt = new Date(d);

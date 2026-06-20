@@ -779,50 +779,59 @@ async function carregarNibo() {
   console.log('[Nibo] Total débitos:', debitData.items.length, '| pagos:', debitData.items.filter(i=>i.isPaid).length);
   loaderEl.textContent = 'Processando...';
 
-  // === DIAGNÓSTICO: descobrir endpoint correto para data de pagamento ===
-  // Roda em background para não atrasar o dashboard
+  // === DIAGNÓSTICO: descobrir data de pagamento real ===
   (async () => {
     try {
-      // 1. Ver TODOS os campos de 2 itens pagos (procurar campo de data real)
+      // 1. Todos os campos do item pago via Asaas (procurar campo de data oculto)
       const pagoAsaas = (creditData.items||[]).find(i => i.isPaid === true && !i.isEntry && !i.paymentDate);
-      const pagoManual = (creditData.items||[]).find(i => i.isPaid === true && !i.isEntry && i.paymentDate);
-      console.group('[Diagnóstico Nibo] Campos disponíveis nos itens');
-      if (pagoAsaas)  { console.log('Item pago via Asaas (sem paymentDate):'); console.log(JSON.parse(JSON.stringify(pagoAsaas))); }
-      if (pagoManual) { console.log('Item pago com paymentDate:');             console.log(JSON.parse(JSON.stringify(pagoManual))); }
-      console.groupEnd();
+      if (pagoAsaas) {
+        console.log('[Diag] TODOS OS CAMPOS do item pago via Asaas:');
+        Object.entries(pagoAsaas).forEach(([k,v]) => console.log(`  ${k}:`, v));
+      }
 
-      // 2. Listar contas bancárias
+      // 2. Todas as contas bancárias
       const accR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=accounts`);
       const accD = await accR.json();
-      console.group('[Diagnóstico Nibo] Contas bancárias');
-      console.table((accD.items||[]).map(a => ({ id: a.accountId||a.id, nome: a.name||a.description, tipo: a.accountType||a.type, saldo: a.balance })));
-      console.groupEnd();
+      console.log('[Diag] Contas bancárias (', (accD.items||[]).length, '):');
+      (accD.items||[]).forEach((a,i) => {
+        const id = a.accountId||a.id||a.accountGuid||'?';
+        console.log(`  ${i+1}. "${a.name||a.description}" | id: ${id} | tipo: ${a.accountType||a.type||'?'}`);
+      });
 
-      // 3. Testar endpoint de lançamentos da conta (entries)
-      const firstAcc = (accD.items||[])[0];
-      if (firstAcc) {
-        const accId = firstAcc.accountId || firstAcc.id;
-        const entR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('accounts/'+accId+'/entries')}&%24top=3`);
-        const entD = await entR.json();
-        console.group('[Diagnóstico Nibo] Entradas da primeira conta (3 itens)');
-        console.log('Conta:', firstAcc.name||firstAcc.description, '| Status:', entR.status);
-        if (entD.items?.length) console.log(JSON.parse(JSON.stringify(entD.items[0])));
-        else console.log(entD);
-        console.groupEnd();
+      // 3. Encontrar conta Asaas e testar variantes de endpoint de lançamentos
+      const asaasAcc = (accD.items||[]).find(a=>(a.name||a.description||'').toLowerCase().includes('asaas'))
+                    || (accD.items||[])[0];
+      if (asaasAcc) {
+        const accId = asaasAcc.accountId||asaasAcc.id||asaasAcc.accountGuid;
+        console.log('[Diag] Testando endpoints para conta:', asaasAcc.name||asaasAcc.description, '| id:', accId);
+        const eps = [
+          `accounts/${accId}/entries`,
+          `accounts/${accId}/transactions`,
+          `accounts/${accId}/movements`,
+          `entries?accountId=${accId}&$top=2`,
+          `transactions?accountId=${accId}&$top=2`,
+          `financialentries?accountId=${accId}&$top=2`,
+          `cashflows?accountId=${accId}&$top=2`,
+        ];
+        for (const ep of eps) {
+          const r = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent(ep)}&%24top=2`);
+          const d = await r.json();
+          const info = d.items?.length ? `✓ ${d.items.length} itens — 1º: ${JSON.stringify(Object.keys(d.items[0]))}` : `✗ ${r.status} — ${d.message||d.error||JSON.stringify(d).slice(0,80)}`;
+          console.log(`  ${ep}: ${info}`);
+        }
       }
 
-      // 4. Testar endpoint de recibos de um agendamento específico
-      if (pagoAsaas) {
-        const sid = pagoAsaas.scheduleId || pagoAsaas.id;
-        const recR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('schedules/credit/'+sid+'/receipts')}`);
-        const recD = await recR.json();
-        console.group('[Diagnóstico Nibo] Recibos de um agendamento pago');
-        console.log('ScheduleId:', sid, '| Status:', recR.status);
-        console.log(recD);
-        console.groupEnd();
+      // 4. Testar $expand=receipts no schedules/credit
+      const sid = pagoAsaas?.scheduleId || pagoAsaas?.id;
+      if (sid) {
+        const epExp = `schedules/credit?$filter=scheduleId eq '${sid}'&$expand=receipts`;
+        const rExp = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('schedules/credit')}&%24filter=${encodeURIComponent(`scheduleId eq '${sid}'`)}&%24expand=receipts`);
+        const dExp = await rExp.json();
+        console.log('[Diag] $expand=receipts status:', rExp.status);
+        if (dExp.items?.[0]) console.log('  Item com expand:', JSON.stringify(Object.keys(dExp.items[0])));
       }
     } catch(e) {
-      console.warn('[Diagnóstico Nibo] Erro:', e.message);
+      console.warn('[Diag] Erro:', e.message);
     }
   })();
   // === FIM DIAGNÓSTICO ===

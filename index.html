@@ -775,12 +775,14 @@ async function carregarNibo() {
   REAL.despesa  = Array(12).fill(0);
   REAL.categorias = {};
 
-  // REGIME DE CAIXA: conta o valor efetivamente recebido = value - openValue
-  // Cobre: pagamento total (openValue=0), parcial (openValue<value), e isPaid=true
+  // REGIME DE CAIXA: conta o valor efetivamente recebido
+  // isPaid=true → value inteiro; senão → value - openValue (parcialmente recebido)
   let _cSkipNaoPago=0, _cSkipAno=0, _cContado=0;
-  const _janItens=[];
   for (const item of (creditData.items||[])) {
-    const v = Math.abs(item.value||0) - Math.abs(item.openValue||0);
+    const isPaidTrue = item.isPaid === true;
+    const v = isPaidTrue
+      ? Math.abs(item.value||0)
+      : Math.abs(item.value||0) - Math.abs(item.openValue||0);
     if (v <= 0) { _cSkipNaoPago++; continue; }
     const d = item.paymentDate || item.dueDate || item.scheduleDate;
     if (!d) continue;
@@ -789,7 +791,6 @@ async function carregarNibo() {
     _cContado++;
     const m = dt.getMonth();
     REAL.receita[m] += v;
-    if (m === 0) _janItens.push({ v: +v.toFixed(2), pay: item.paymentDate||null, due: item.dueDate, cat: item.categories?.[0]?.categoryName||'', desc: (item.description||'').slice(0,40) });
 
     // Por categoria de receita (Escola, Prime, Eventos, Clube dos Sócios, C3X)
     const cat = item.categories?.[0]?.categoryName || item.categoryName || '';
@@ -806,21 +807,6 @@ async function carregarNibo() {
     }
     // Clube dos Sócios, C3X, Juros — somam apenas na receita total
   }
-  console.log('[Créditos] Contados:', _cContado, '| Sem valor recebido:', _cSkipNaoPago, '| Ano≠2026:', _cSkipAno);
-  const _janTotal = _janItens.reduce((s,i)=>s+i.v,0);
-  console.log(`[Jan] ${_janItens.length} itens | Total: R$${_janTotal.toFixed(2)}`);
-  console.table(_janItens);
-
-  // Log do primeiro débito para diagnóstico de campos
-  if (debitData.items?.length > 0) {
-    const ex = debitData.items[0];
-    console.log('[Nibo] Exemplo de débito:', JSON.stringify({
-      isPaid: ex.isPaid, openValue: ex.openValue, value: ex.value,
-      paymentDate: ex.paymentDate, dueDate: ex.dueDate,
-      category: ex.categories?.[0]?.categoryName || ex.categoryName
-    }));
-  }
-
   // Investimentos/distribuições: não entram no Resultado Operacional
   const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
 
@@ -848,13 +834,6 @@ async function carregarNibo() {
     // Investimentos (Adiantamento de Lucros etc.) ficam só em REAL.categorias
   }
 
-  // Log para diagnóstico de categorias encontradas
-  const topCats = Object.entries(REAL.categorias)
-    .map(([c,vals])=>[c, vals.reduce((a,b)=>a+b,0)])
-    .sort((a,b)=>b[1]-a[1]).slice(0,12);
-  console.log('[Nibo] Top categorias débito:', topCats.map(([c,v])=>`${c}: ${v.toFixed(0)}`).join(' | '));
-  console.log('[Nibo] REAL receita Jan-Jun:', REAL.receita.slice(0,6).map(v=>v.toFixed(0)).join(', '));
-  console.log('[Nibo] REAL despesa Jan-Jun:', REAL.despesa.slice(0,6).map(v=>v.toFixed(0)).join(', '));
 
   // Resultado
   for (let i=0;i<12;i++) REAL.resultado[i] = REAL.receita[i] - REAL.despesa[i];

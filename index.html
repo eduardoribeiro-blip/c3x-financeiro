@@ -759,6 +759,22 @@ async function carregarNibo() {
   loaderEl.textContent = 'Buscando receitas...';
   const creditData = await niboGetAll('schedules/credit', filtro);
 
+  // Tenta buscar itens pagos em 2026 com dueDate em outros anos (regime de caixa real)
+  let extraCredits = [];
+  try {
+    const extraData = await niboGetAll('schedules/credit', {
+      '$orderby': 'paymentDate',
+      '$filter': 'isPaid eq true and year(paymentDate) eq 2026'
+    });
+    const idsSelecionados = new Set(creditData.items.map(i => i.scheduleId || i.id));
+    extraCredits = (extraData.items || []).filter(i => !idsSelecionados.has(i.scheduleId || i.id));
+    console.log('[Nibo] Créditos extras via paymentDate 2026:', extraCredits.length,
+      '| ex:', extraCredits[0] ? `${extraCredits[0].description} due=${extraCredits[0].dueDate} pay=${extraCredits[0].paymentDate}` : 'nenhum');
+  } catch(e) {
+    console.warn('[Nibo] filtro paymentDate não suportado:', e.message);
+  }
+  creditData.items = creditData.items.concat(extraCredits);
+
   loaderEl.textContent = 'Buscando despesas...';
   const debitData = await niboGetAll('schedules/debit', filtro);
 

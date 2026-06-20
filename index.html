@@ -779,56 +779,58 @@ async function carregarNibo() {
   console.log('[Nibo] Total débitos:', debitData.items.length, '| pagos:', debitData.items.filter(i=>i.isPaid).length);
   loaderEl.textContent = 'Processando...';
 
-  // === DIAGNÓSTICO: descobrir data de pagamento real ===
+  // === DIAGNÓSTICO FINAL: individual record + endpoints alternativos ===
   (async () => {
     try {
-      // 1. Todos os campos do item pago via Asaas (procurar campo de data oculto)
-      const pagoAsaas = (creditData.items||[]).find(i => i.isPaid === true && !i.isEntry && !i.paymentDate);
-      if (pagoAsaas) {
-        console.log('[Diag] TODOS OS CAMPOS do item pago via Asaas:');
-        Object.entries(pagoAsaas).forEach(([k,v]) => console.log(`  ${k}:`, v));
-      }
+      // Pegar um item Asaas pago em atraso (dueDate 2025, pago em 2026)
+      const atrasado = (creditData.items||[]).find(i =>
+        i.isPaid === true && !i.isEntry && !i.paymentDate &&
+        i.dueDate && new Date(i.dueDate).getFullYear() === 2025
+      );
+      const sid = atrasado?.scheduleId || atrasado?.id;
+      console.log('[Diag] Item em atraso escolhido:', atrasado?.description, '| dueDate:', atrasado?.dueDate?.substring(0,10), '| updateDate:', atrasado?.updateDate?.substring(0,10));
 
-      // 2. Todas as contas bancárias
-      const accR = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=accounts`);
-      const accD = await accR.json();
-      console.log('[Diag] Contas bancárias (', (accD.items||[]).length, '):');
-      (accD.items||[]).forEach((a,i) => {
-        const id = a.accountId||a.id||a.accountGuid||'?';
-        console.log(`  ${i+1}. "${a.name||a.description}" | id: ${id} | tipo: ${a.accountType||a.type||'?'}`);
-      });
-
-      // 3. Encontrar conta Asaas e testar variantes de endpoint de lançamentos
-      const asaasAcc = (accD.items||[]).find(a=>(a.name||a.description||'').toLowerCase().includes('asaas'))
-                    || (accD.items||[])[0];
-      if (asaasAcc) {
-        const accId = asaasAcc.accountId||asaasAcc.id||asaasAcc.accountGuid;
-        console.log('[Diag] Testando endpoints para conta:', asaasAcc.name||asaasAcc.description, '| id:', accId);
-        const eps = [
-          `accounts/${accId}/entries`,
-          `accounts/${accId}/transactions`,
-          `accounts/${accId}/movements`,
-          `entries?accountId=${accId}&$top=2`,
-          `transactions?accountId=${accId}&$top=2`,
-          `financialentries?accountId=${accId}&$top=2`,
-          `cashflows?accountId=${accId}&$top=2`,
-        ];
-        for (const ep of eps) {
-          const r = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent(ep)}&%24top=2`);
-          const d = await r.json();
-          const info = d.items?.length ? `✓ ${d.items.length} itens — 1º: ${JSON.stringify(Object.keys(d.items[0]))}` : `✗ ${r.status} — ${d.message||d.error||JSON.stringify(d).slice(0,80)}`;
-          console.log(`  ${ep}: ${info}`);
-        }
-      }
-
-      // 4. Testar $expand=receipts no schedules/credit
-      const sid = pagoAsaas?.scheduleId || pagoAsaas?.id;
+      // 1. Buscar registro individual — pode ter mais campos
       if (sid) {
-        const epExp = `schedules/credit?$filter=scheduleId eq '${sid}'&$expand=receipts`;
-        const rExp = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('schedules/credit')}&%24filter=${encodeURIComponent(`scheduleId eq '${sid}'`)}&%24expand=receipts`);
-        const dExp = await rExp.json();
-        console.log('[Diag] $expand=receipts status:', rExp.status);
-        if (dExp.items?.[0]) console.log('  Item com expand:', JSON.stringify(Object.keys(dExp.items[0])));
+        const r1 = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent('schedules/credit/'+sid)}`);
+        const d1 = await r1.json();
+        console.log('[Diag] GET schedules/credit/{id} — status:', r1.status);
+        if (r1.ok) {
+          console.log('  Campos extras vs lista:', Object.keys(d1).filter(k => !atrasado || !(k in atrasado)));
+          console.log('  paymentDate:', d1.paymentDate||'(vazio)');
+          console.log('  settledDate:', d1.settledDate||'(vazio)');
+          console.log('  paidDate:', d1.paidDate||'(vazio)');
+          console.log('  receiptDate:', d1.receiptDate||'(vazio)');
+          console.log('  Todos os campos:', Object.keys(d1).join(', '));
+        } else { console.log('  Resposta:', JSON.stringify(d1).slice(0,200)); }
+      }
+
+      // 2. Testar endpoints completamente diferentes
+      const eps2 = [
+        'schedules/credit/receipts',
+        'receipts',
+        'payments',
+        'baixas',
+        'liquidations',
+        'schedulereceipts',
+        'schedule-receipts',
+        'financialMovements',
+        'bankstatements',
+        'bankStatement',
+      ];
+      console.log('[Diag] Testando outros endpoints:');
+      for (const ep of eps2) {
+        const r = await fetch(`/api/nibo?token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent(ep)}&%24top=2`);
+        const d = await r.json();
+        const ok = r.status !== 404 && r.status !== 405;
+        if (ok) console.log(`  ✓ ${ep}: status=${r.status} | campos=${d.items?.[0] ? Object.keys(d.items[0]).join(',') : JSON.stringify(d).slice(0,120)}`);
+        else    console.log(`  ✗ ${ep}: ${r.status}`);
+      }
+
+      // 3. Ver se scheduleId do item pago via Asaas aparece em isEntry=true com dueDate 2026
+      if (sid) {
+        const espelho = (creditData.items||[]).find(i => i.isEntry === true && i.scheduleId === sid);
+        console.log('[Diag] isEntry=true para o mesmo scheduleId:', espelho ? `ENCONTRADO — dueDate: ${espelho.dueDate?.substring(0,10)}` : 'NÃO ENCONTRADO');
       }
     } catch(e) {
       console.warn('[Diag] Erro:', e.message);

@@ -1498,23 +1498,28 @@ function abrirCC(cc) {
   // Dados do painel de orçamento (Realizado preenchido pelo usuário)
   const orcData = carregarOrcamento();
   const ccOrcReal = (orcData[cc] || {});
-  const getOrcReal = (kpiId) => {
+  const getOrcRealSum = (kpiId) => {
     if (ccOrcReal[kpiId]) return sumRange(ccOrcReal[kpiId].real || Array(12).fill(0), from, to);
     return sumRange((carregarConfig().ccDados[cc]||{})[kpiId]||Array(12).fill(0), from, to);
   };
-  const getVal = (kpiId) => kpisSel.includes(kpiId) ? getOrcReal(kpiId) : null;
-  const getAvg = (kpiId) => kpisSel.includes(kpiId) ? getOrcReal(kpiId) / meses : null;
+  // Agrega conforme o tipo do KPI: 'avg' = média do período, 'sum' = soma
+  const getKpi = (kpiId) => {
+    if (!kpisSel.includes(kpiId)) return null;
+    const def = ORC_KPIS.find(k => k.id === kpiId);
+    const total = getOrcRealSum(kpiId);
+    return (def?.agr === 'avg') ? total / meses : total;
+  };
 
-  const unidades  = getVal('unidades');
-  const novos     = getVal('novos');
-  const churnVal  = getVal('churn');
+  const unidades  = getKpi('unidades');   // média: clientes ativos no período
+  const novos     = getKpi('novos');      // soma: novos no período
+  const churnVal  = getKpi('churn');      // soma: cancelamentos no período
   // Inadimplência vem do Nibo automaticamente (isPaid=false + vencido)
   const ccInadimData = CC_INADIM[cc] || { total: 0, porMes: Array(12).fill(0) };
   const inadim = sumRange(ccInadimData.porMes, from, to);
-  const conversao = getAvg('conversao');
-  const meta_rec  = getVal('meta_rec');
-  const mrrManual = getVal('mrr');
-  const ltvManual = getVal('ltv');
+  const conversao = getKpi('conversao');  // média: taxa %
+  const meta_rec  = getKpi('meta_rec');   // soma: meta total do período
+  const mrrManual = getKpi('mrr');        // média: MRR do período
+  const ltvManual = getKpi('ltv');        // média: LTV
 
   // KPIs calculados — só mostrar se selecionados E se tiverem dados suficientes
   const sel = kpisSel;
@@ -1533,14 +1538,14 @@ function abrirCC(cc) {
     { label:'Despesa total',          value:fmtFull(desp),  sub:'no período', cor:'var(--red)',   show: true },
     { label:'Resultado',              value:fmtFull(res),   sub:'receita − despesa', cor:res>=0?'var(--green)':'var(--red)', show: true },
     // Manuais selecionados
-    { label:'Unidades / Clientes',    value:unidades!==null?unidades.toString():'—',   sub:'ativos no período',    cor:'var(--blue)',  show: unidades!==null },
+    { label:'Unidades / Clientes',    value:unidades!==null?Math.round(unidades).toString():'—', sub:'ativos no período',    cor:'var(--blue)',  show: unidades!==null },
     { label:'Novos no período',       value:novos!==null?novos.toString():'—',         sub:'aquisições',           cor:'var(--blue)',  show: novos!==null },
     { label:'Churn',                  value:churnVal!==null?churnVal.toString():'—',   sub:'cancelamentos',        cor:'var(--red)',   show: churnVal!==null },
     { label:'Inadimplência (Nibo)',    value:inadim>0?fmtFull(inadim):'R$ 0,00',        sub:'vencido não pago',     cor:inadim>0?'var(--red)':'var(--green)', show: true },
     { label:'Conversão %',            value:conversao!==null?conversao.toFixed(1)+'%':'—', sub:'taxa média',       cor:'var(--blue)',  show: conversao!==null },
     { label:'Meta de Receita',        value:meta_rec!==null?fmtFull(meta_rec):'—',    sub:'projetado',            cor:'var(--text2)', show: meta_rec!==null },
-    { label:'MRR',                    value:mrrManual!==null?fmtK(mrrManual/meses):'—', sub:'recorrente/mês',     cor:'var(--green)', show: mrrManual!==null },
-    { label:'LTV',                    value:ltvManual!==null?fmtK(ltvManual/meses):'—', sub:'por cliente',        cor:'var(--green)', show: ltvManual!==null },
+    { label:'MRR',                    value:mrrManual!==null?fmtK(mrrManual):'—', sub:'recorrente/mês',     cor:'var(--green)', show: mrrManual!==null },
+    { label:'LTV',                    value:ltvManual!==null?fmtK(ltvManual):'—', sub:'por cliente',        cor:'var(--green)', show: ltvManual!==null },
     // Calculados selecionados
     { label:'Ticket Médio',           value:ticket!==null?fmtK(ticket):'Precisa de Unidades', sub:'receita÷unidades',    cor:'var(--amber)', show: sel.includes('ticket') },
     { label:'ARPU',                   value:arpu!==null?fmtK(arpu):'Precisa de Unidades',     sub:'receita÷clientes',    cor:'var(--amber)', show: sel.includes('arpu') },
@@ -1758,13 +1763,13 @@ function sair() {
 ═══════════════════════════════════════════ */
 
 const ORC_KPIS = [
-  { id:'unidades',  label:'Unidades / Clientes ativos', icon:'👥', unit:'un',  autoReal: false },
-  { id:'novos',     label:'Novos no mês',               icon:'➕', unit:'un',  autoReal: false },
-  { id:'churn',     label:'Churn (cancelamentos)',      icon:'📉', unit:'un',  autoReal: false },
-  { id:'mrr',       label:'MRR (R$)',                   icon:'💵', unit:'R$',  autoReal: true,  autoDesc:'Receita Nibo' },
-  { id:'conversao', label:'Taxa de Conversão %',        icon:'🔄', unit:'%',   autoReal: false },
-  { id:'meta_rec',  label:'Meta de Receita (R$)',       icon:'🎯', unit:'R$',  autoReal: false },
-  { id:'ltv',       label:'LTV (R$)',                   icon:'♾️', unit:'R$',  autoReal: false },
+  { id:'unidades',  label:'Unidades / Clientes ativos', icon:'👥', unit:'un',  autoReal: false, agr:'avg' }, // nível: média do período
+  { id:'novos',     label:'Novos no mês',               icon:'➕', unit:'un',  autoReal: false, agr:'sum' }, // fluxo: soma
+  { id:'churn',     label:'Churn (cancelamentos)',      icon:'📉', unit:'un',  autoReal: false, agr:'sum' }, // fluxo: soma
+  { id:'mrr',       label:'MRR (R$)',                   icon:'💵', unit:'R$',  autoReal: true,  autoDesc:'Receita Nibo', agr:'avg' },
+  { id:'conversao', label:'Taxa de Conversão %',        icon:'🔄', unit:'%',   autoReal: false, agr:'avg' },
+  { id:'meta_rec',  label:'Meta de Receita (R$)',       icon:'🎯', unit:'R$',  autoReal: false, agr:'sum' },
+  { id:'ltv',       label:'LTV (R$)',                   icon:'♾️', unit:'R$',  autoReal: false, agr:'avg' },
 ];
 
 let ORC_CC_ATIVO = null;

@@ -460,16 +460,24 @@ tr:hover td { background: #f9fafb; }
   <!-- PAGE: PROJEÇÕES -->
   <div class="page" id="page-projecoes">
     <div class="page-header">
-      <div class="page-badge">Projeções</div>
-      <h1 class="page-title">Projeções 2026</h1>
-      <p class="page-sub">Metas mensais de receita, despesa e resultado para o ano completo.</p>
+      <div class="page-badge">Tendências</div>
+      <h1 class="page-title">Projeções Financeiras</h1>
+      <p class="page-sub">Acumulado mês a mês de receita e despesa, e gap entre o que foi planejado e o realizado.</p>
     </div>
-    <div class="table-card">
-      <div class="table-header"><div class="table-title">Projeção Anual — Receita</div></div>
-      <table>
-        <thead><tr><th>Mês</th><th>Receita proj.</th><th>Escola de Sócios</th><th>Prime</th><th>Destrava</th><th>Despesa proj.</th><th>Resultado proj.</th></tr></thead>
-        <tbody id="proj-table-body"></tbody>
-      </table>
+    <div class="kpi-grid kpi-grid-3" id="proj-kpis"></div>
+    <div class="charts-grid" style="margin-top:1.25rem">
+      <div class="chart-card">
+        <div class="chart-title">Tendência da receita acumulada</div>
+        <div style="height:260px"><canvas id="chartProjRecAcum"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Tendência das despesas acumuladas</div>
+        <div style="height:260px"><canvas id="chartProjDespAcum"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:1.25rem">
+      <div class="chart-title">Diferença acumulada de receita (real – projetado)</div>
+      <div style="height:220px"><canvas id="chartProjGap"></canvas></div>
     </div>
   </div>
 
@@ -1064,20 +1072,64 @@ function renderMensal() {
 }
 
 function renderProjecoes() {
-  const tbody = document.getElementById('proj-table-body');
-  tbody.innerHTML = '';
-  for (let i=0;i<12;i++) {
-    const temDados = REAL.receita[i]>0;
-    tbody.innerHTML += `<tr>
-      <td class="td-name">${MESES_FULL[i]}${temDados?' <span class="badge badge-green" style="font-size:10px">✓ Real</span>':''}</td>
-      <td class="td-mono">${fmtK(PROJ.receita[i])}</td>
-      <td class="td-mono">${fmtK(PROJ.escola[i])}</td>
-      <td class="td-mono">${fmtK(PROJ.prime[i])}</td>
-      <td class="td-mono">${fmtK(PROJ.destrava[i])}</td>
-      <td class="td-mono">${fmtK(PROJ.despesa[i])}</td>
-      <td class="td-mono" style="color:var(--green)">${fmtK(PROJ.resultado[i])}</td>
-    </tr>`;
+  const [from, to] = periodoMeses();
+
+  const labels = [];
+  const recRealAcum = [], recProjAcum = [];
+  const despRealAcum = [], despProjAcum = [];
+  const gapAcum = [];
+  let rr = 0, rp = 0, dr = 0, dp = 0;
+
+  for (let i = from; i <= to; i++) {
+    labels.push(MESES[i]);
+    rr += REAL.receita[i];  rp += PROJ.receita[i];
+    dr += REAL.despesa[i];  dp += PROJ.despesa[i];
+    recRealAcum.push(rr);   recProjAcum.push(rp);
+    despRealAcum.push(dr);  despProjAcum.push(dp);
+    gapAcum.push(rr - rp);
   }
+
+  const gap = rr - rp;
+
+  // KPIs
+  document.getElementById('proj-kpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Receita Acumulada (Real)</div>
+      <div class="kpi-value">${fmtK(rr)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Receita Acumulada (Proj)</div>
+      <div class="kpi-value">${fmtK(rp)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Gap (Real − Proj)</div>
+      <div class="kpi-value" style="color:${gap>=0?'var(--green)':'var(--red)'}">${fmtK(gap)}</div>
+    </div>`;
+
+  const lineOpts = (yFmt) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: true, position: 'bottom', labels: { color: gc.text, font: { size: 11 }, boxWidth: 20 } } },
+    scales: {
+      x: { grid: { color: gc.grid }, ticks: { color: gc.text, font: { size: 11 } } },
+      y: { grid: { color: gc.grid }, ticks: { color: gc.text, font: { size: 11 }, callback: v => yFmt(v) } }
+    }
+  });
+
+  mkChart('chartProjRecAcum', { type: 'line', data: { labels, datasets: [
+    { label: 'Projetado', data: recProjAcum,  borderColor: '#9ca3af', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 3, tension: 0.1 },
+    { label: 'Realizado', data: recRealAcum,  borderColor: '#1e3a5f', backgroundColor: 'transparent', borderWidth: 2,   pointRadius: 3, tension: 0.1 }
+  ]}, options: lineOpts(v => 'R$'+Math.round(v/1000)+'k') });
+
+  mkChart('chartProjDespAcum', { type: 'line', data: { labels, datasets: [
+    { label: 'Projetado', data: despProjAcum, borderColor: '#9ca3af', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 3, tension: 0.1 },
+    { label: 'Realizado', data: despRealAcum, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2,   pointRadius: 3, tension: 0.1 }
+  ]}, options: lineOpts(v => 'R$'+Math.round(v/1000)+'k') });
+
+  mkChart('chartProjGap', { type: 'bar', data: { labels, datasets: [
+    { label: 'Gap acumulado', data: gapAcum, backgroundColor: '#1e3a5f', borderRadius: 4 }
+  ]}, options: { ...barOpts(v => 'R$'+Math.round(v/1000)+'k'),
+    plugins: { legend: { display: true, position: 'bottom', labels: { color: gc.text, font: { size: 11 }, boxWidth: 20 } } }
+  }});
 }
 
 /* ═══════════════════════════════════════════

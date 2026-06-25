@@ -777,7 +777,7 @@ async function carregarCategoriasNibo() {
     for (const cat of items) {
       const nome = (cat.name || cat.categoryName || cat.description || '').trim();
       if (!nome) continue;
-      const tipoRaw = cat.tipo || cat.categoryType ?? cat.type ?? '';
+      const tipoRaw = cat.tipo || cat.categoryType || cat.type || '';
       const isRec = tipoRaw === 1 || String(tipoRaw).toLowerCase() === 'in' || String(tipoRaw).toLowerCase() === 'credit';
 
       if (isRec) rec.push(nome); else desp.push(nome);

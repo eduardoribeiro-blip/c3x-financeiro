@@ -1533,8 +1533,10 @@ function abrirCC(cc) {
     if (!kpisSel.includes(kpiId)) return null;
     const def = ORC_KPIS.find(k => k.id === kpiId);
     if (def?.agr === 'avg') {
-      // Média apenas dos meses com valor > 0 (KPIs de nível/stock)
-      const arr = ccOrcReal[kpiId]?.real || (carregarConfig().ccDados[cc]||{})[kpiId] || Array(12).fill(0);
+      // autoReal: usa CC_RECEITA (Nibo); manual: usa dados digitados pelo usuário
+      const arr = def?.autoReal
+        ? (CC_RECEITA[cc] || Array(12).fill(0))
+        : (ccOrcReal[kpiId]?.real || (carregarConfig().ccDados[cc]||{})[kpiId] || Array(12).fill(0));
       const vals = [];
       for (let m = from; m <= to; m++) if ((arr[m] || 0) > 0) vals.push(arr[m]);
       return vals.length > 0 ? vals.reduce((a,b) => a+b, 0) / vals.length : null;

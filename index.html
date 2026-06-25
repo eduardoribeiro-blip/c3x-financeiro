@@ -765,19 +765,25 @@ async function niboGetAll(endpoint, params={}) {
    CARREGAR DADOS DO NIBO
 ═══════════════════════════════════════════ */
 async function carregarCategoriasNibo() {
-  // Busca todas as categorias configuradas no Nibo (inclusive sem lançamentos)
-  // e salva no localStorage para uso offline
   try {
     const data = await niboGet('categories');
     const items = data.items || data || [];
     if (!Array.isArray(items) || items.length === 0) return;
+
+    // Log estrutura completa para inspecionar campos disponíveis (seção/grupo pai)
+    console.log('[Nibo] Estrutura de categoria (amostra):', JSON.stringify(items.slice(0,3), null, 2));
+    console.log('[Nibo] Todos os campos disponíveis:', items.length > 0 ? Object.keys(items[0]) : []);
+    console.log('[Nibo] Lista completa:', items.map(c => ({
+      nome: c.name || c.categoryName || c.description,
+      tipo: c.categoryType ?? c.type,
+      pai:  c.parentCategory || c.parent || c.parentCategoryId || c.group || c.section || null
+    })));
 
     const rec  = [];
     const desp = [];
     for (const cat of items) {
       const nome = cat.name || cat.categoryName || cat.description || '';
       if (!nome) continue;
-      // categoryType: 1 = receita, 2 = despesa (padrão Nibo)
       const tipo = cat.categoryType ?? cat.type ?? 0;
       if (tipo === 1 || String(tipo).toLowerCase() === 'credit')  rec.push(nome);
       else desp.push(nome);

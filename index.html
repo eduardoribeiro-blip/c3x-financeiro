@@ -1159,8 +1159,7 @@ function salvarConfig() {
 
   localStorage.setItem('c3x_config_v2', JSON.stringify(config));
   const msg = document.getElementById('config-saved-msg');
-  msg.style.display = 'inline';
-  setTimeout(()=>msg.style.display='none', 2000);
+  if (msg) { msg.style.display = 'inline'; setTimeout(()=>msg.style.display='none', 2000); }
 }
 
 function renderConfig() {
@@ -1253,7 +1252,7 @@ function renderServicos() {
     const rec  = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
     const res  = rec - desp;
     const cor  = colors[idx % colors.length];
-    return `<div class="service-card" onclick="abrirCC(${JSON.stringify(cc)})">
+    return `<div class="service-card" onclick="abrirCC('${cc.replace(/'/g, "\\'")}')">
       <div style="width:32px;height:4px;border-radius:2px;background:${cor};margin-bottom:12px"></div>
       <div class="service-name">${cc}</div>
       <div class="service-label">Despesa realizada</div>
@@ -1574,8 +1573,7 @@ function salvarOrcamento() {
   });
   localStorage.setItem('c3x_orcamento_v1', JSON.stringify(data));
   const msg = document.getElementById('orc-saved-msg');
-  msg.style.display = 'inline';
-  setTimeout(() => msg.style.display = 'none', 2000);
+  if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2000); }
 }
 
 function renderOrcamento() {
@@ -1589,7 +1587,7 @@ function renderOrcamento() {
   if (!ORC_CC_ATIVO) ORC_CC_ATIVO = ccsComMovimento[0];
   const chipsEl = document.getElementById('orc-cc-chips');
   chipsEl.innerHTML = ccsComMovimento.map(cc => `
-    <button onclick="selecionarOrcCC(${JSON.stringify(cc)},this)"
+    <button onclick="selecionarOrcCC('${cc.replace(/'/g, "\\'")}', this)"
       style="padding:6px 14px;border-radius:20px;border:1px solid ${ORC_CC_ATIVO===cc?'var(--green)':'var(--border)'};
              background:${ORC_CC_ATIVO===cc?'var(--green)':'white'};
              color:${ORC_CC_ATIVO===cc?'white':'var(--text2)'};

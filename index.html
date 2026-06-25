@@ -1528,12 +1528,18 @@ function abrirCC(cc) {
     if (ccOrcReal[kpiId]) return sumRange(ccOrcReal[kpiId].real || Array(12).fill(0), from, to);
     return sumRange((carregarConfig().ccDados[cc]||{})[kpiId]||Array(12).fill(0), from, to);
   };
-  // Agrega conforme o tipo do KPI: 'avg' = média do período, 'sum' = soma
+  // Agrega conforme o tipo do KPI: 'avg' = média dos meses preenchidos, 'sum' = soma total
   const getKpi = (kpiId) => {
     if (!kpisSel.includes(kpiId)) return null;
     const def = ORC_KPIS.find(k => k.id === kpiId);
-    const total = getOrcRealSum(kpiId);
-    return (def?.agr === 'avg') ? total / meses : total;
+    if (def?.agr === 'avg') {
+      // Média apenas dos meses com valor > 0 (KPIs de nível/stock)
+      const arr = ccOrcReal[kpiId]?.real || (carregarConfig().ccDados[cc]||{})[kpiId] || Array(12).fill(0);
+      const vals = [];
+      for (let m = from; m <= to; m++) if ((arr[m] || 0) > 0) vals.push(arr[m]);
+      return vals.length > 0 ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+    }
+    return getOrcRealSum(kpiId);
   };
 
   const unidades  = getKpi('unidades');   // média: clientes ativos no período

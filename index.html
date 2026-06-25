@@ -1560,22 +1560,26 @@ function abrirCC(cc) {
   const mrrManual = getKpi('mrr');        // média: MRR do período
   const ltvManual = getKpi('ltv');        // média: LTV
 
+  // Receita total = recebido + inadimplência (base para ARPU, Ticket, Atingimento Meta)
+  const recTotal = rec + inadimCC;
+
   // KPIs calculados — só mostrar se selecionados E se tiverem dados suficientes
   const sel = kpisSel;
-  const ticket     = sel.includes('ticket')     && unidades > 0 ? rec / unidades : null;
-  const arpu       = sel.includes('arpu')       && unidades > 0 ? rec / unidades : null;
+  const ticket     = sel.includes('ticket')     && unidades > 0 ? recTotal / unidades : null;
+  const arpu       = sel.includes('arpu')       && unidades > 0 ? recTotal / unidades : null;
   const cac        = sel.includes('cac')        && novos > 0    ? desp / novos   : null;
   const roi        = sel.includes('roi')        && desp > 0     ? (rec - desp) / desp * 100 : null;
   const margemCalc = sel.includes('margem')     && rec > 0      ? (rec - desp) / rec * 100   : null;
   const mrr_churn  = sel.includes('mrr_churn')  && churnVal > 0 && (ticket||mrrManual/meses) > 0 ? churnVal * (ticket || mrrManual/meses) : null;
-  const inadim_pct = sel.includes('inadim_pct') && rec > 0 ? inadim / rec * 100 : null;
-  const ating_meta = sel.includes('ating_meta') && meta_rec > 0 ? rec / meta_rec * 100 : null;
+  const inadim_pct = sel.includes('inadim_pct') && recTotal > 0 ? inadim / recTotal * 100 : null;
+  const ating_meta = sel.includes('ating_meta') && meta_rec > 0 ? recTotal / meta_rec * 100 : null;
 
   // Sempre mostrar receita/despesa/resultado do CC
   const kpisHTML = [
-    { label:'Receita total',          value:fmtFull(rec),   sub:'no período', cor:'var(--green)', show: rec>0 },
+    { label:'Receita recebida',       value:fmtFull(rec),      sub:'regime de caixa',    cor:'var(--green)', show: true },
+    { label:'Receita total',          value:fmtFull(recTotal), sub:'recebida + inadimp.', cor:'var(--green)', show: recTotal !== rec },
     { label:'Despesa total',          value:fmtFull(desp),  sub:'no período', cor:'var(--red)',   show: true },
-    { label:'Resultado',              value:fmtFull(res),   sub:'receita − despesa', cor:res>=0?'var(--green)':'var(--red)', show: true },
+    { label:'Resultado',              value:fmtFull(res),   sub:'recebida − despesa', cor:res>=0?'var(--green)':'var(--red)', show: true },
     // Manuais selecionados
     { label:'Unidades / Clientes',    value:unidades!==null?Math.round(unidades).toString():'—', sub:'ativos no período',    cor:'var(--blue)',  show: unidades!==null },
     { label:'Novos no período',       value:novos!==null?novos.toString():'—',         sub:'aquisições',           cor:'var(--blue)',  show: novos!==null },

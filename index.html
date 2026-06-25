@@ -1513,8 +1513,10 @@ function abrirCC(cc) {
   document.getElementById('servico-cc-title').textContent = cc;
   document.getElementById('page-servicos-cc').dataset.cc = cc;
 
-  const desp = sumRange(CC_DATA[cc]?.desp||Array(12).fill(0), from, to);
-  const rec  = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
+  const desp    = sumRange(CC_DATA[cc]?.desp||Array(12).fill(0), from, to);
+  const recPago = CC_RECEITA[cc] ? sumRange(CC_RECEITA[cc], from, to) : 0;
+  const inadimCC = sumRange((CC_INADIM[cc]?.porMes || Array(12).fill(0)), from, to);
+  const rec  = recPago + inadimCC; // Receita Total = Recebido + Inadimplência
   const res  = rec - desp;
   const margem = rec > 0 ? (res/rec)*100 : 0;
 
@@ -1547,9 +1549,8 @@ function abrirCC(cc) {
   const unidades  = getKpi('unidades');   // média: clientes ativos no período
   const novos     = getKpi('novos');      // soma: novos no período
   const churnVal  = getKpi('churn');      // soma: cancelamentos no período
-  // Inadimplência vem do Nibo automaticamente (isPaid=false + vencido)
-  const ccInadimData = CC_INADIM[cc] || { total: 0, porMes: Array(12).fill(0) };
-  const inadim = sumRange(ccInadimData.porMes, from, to);
+  // Inadimplência vem do Nibo automaticamente (isPaid=false + vencido) — já calculado acima em inadimCC
+  const inadim = inadimCC;
   const conversao = getKpi('conversao');  // média: taxa %
   // Meta de Receita vem do Orçamento Geral (fonte única)
   const meta_rec = (() => {

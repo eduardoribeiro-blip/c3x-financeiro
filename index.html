@@ -1089,13 +1089,31 @@ function renderMensal() {
     </tr>`;
   }
 
-  // Mapa CC → projeção de receita (CCs conhecidos)
+  // Receita projetada por CC: derivada do Orçamento Geral (categoria → CC)
   function projRecCC(cc) {
+    const plan = carregarOrcGeral();
     const n = cc.toLowerCase();
-    if (n.includes('escola')) return PROJ.escola[mes];
-    if (n.includes('prime'))  return PROJ.prime[mes];
-    if (n.includes('destrava')) return PROJ.destrava[mes];
-    return null;
+    const baseCats = ORC_GERAL_SECOES.find(s=>s.id==='rec')?.cats || [];
+    const cached = JSON.parse(localStorage.getItem('c3x_nibo_cats_v1') || '{"rec":[],"desp":[]}');
+    const allRec = [...new Set([...baseCats, ...cached.rec])];
+    const v = allRec
+      .filter(cat => {
+        const c = cat.toLowerCase();
+        if (n.includes('escola') && c.includes('escola')) return true;
+        if (n.includes('prime') && (c.includes('prime') || c.includes('mentoria'))) return true;
+        if ((n.includes('destrava') || n.includes('summit') || n.includes('evento')) &&
+            (c.includes('destrava') || c.includes('summit') || c.includes('evento') || c.includes('fora do card'))) return true;
+        return false;
+      })
+      .reduce((sum, cat) => sum + ((plan[cat]||[])[mes]||0), 0);
+    return v > 0 ? v : null;
+  }
+
+  // Despesa projetada por CC: lida do Orçamento CC (meta_desp planejado)
+  function projDespCC(cc) {
+    const orc = carregarOrcamento();
+    const v = (orc[cc]?.meta_desp?.plan?.[mes]) || 0;
+    return v > 0 ? v : null;
   }
 
   // ── Tabela Geral ──────────────────────────────────────────────
@@ -1111,12 +1129,15 @@ function renderMensal() {
     const ccDesp = CC_DATA[cc].desp[mes];
     const ccRec  = CC_RECEITA[cc] ? CC_RECEITA[cc][mes] : 0;
     const ccRes  = ccRec - ccDesp;
-    const ccRecProj = projRecCC(cc);
-    const ccResProj = ccRecProj !== null ? ccRecProj - 0 : null; // sem proj de custo
+    const ccRecProj  = projRecCC(cc);
+    const ccDespProj = projDespCC(cc);
+    const ccResProj  = ccRecProj !== null
+      ? ccRecProj - (ccDespProj !== null ? ccDespProj : ccDesp)
+      : null;
     const ccRows =
-      mkRowCC('Receita',              ccRec,  ccRecProj, false) +
-      mkRowCC('Custos',               ccDesp, null,      true)  +
-      mkRowCC('Resultado Operacional',ccRes,  ccResProj, false);
+      mkRowCC('Receita',              ccRec,  ccRecProj,  false) +
+      mkRowCC('Custos',               ccDesp, ccDespProj, true)  +
+      mkRowCC('Resultado Operacional',ccRes,  ccResProj,  false);
     return `<div class="table-card" style="margin-top:1.25rem">
       <div class="table-header"><div class="table-title">${cc}</div></div>
       <table>
@@ -2004,6 +2025,32 @@ function renderOrcTabela(cc) {
       </td>`).join('')}
     </tr>`;
 
+  // Linha Meta de Despesas: planejado (input) + realizado automático do Nibo
+  const despNibo = (CC_DATA[cc]||{}).desp || Array(12).fill(0);
+  const metaDespData = ccOrc['meta_desp'] || { plan: Array(12).fill(0) };
+  let metaDespCells = '';
+  for (let i = 0; i < 12; i++) {
+    const planVal = metaDespData.plan[i] || 0;
+    const realVal = despNibo[i] || 0;
+    const delta = planVal > 0 ? ((realVal - planVal) / planVal * 100) : null;
+    const deltaHtml = delta !== null
+      ? `<div class="orc-delta ${delta <= 0 ? 'pos' : 'neg'}">${(delta >= 0 ? '+' : '') + delta.toFixed(0)}%</div>`
+      : '';
+    metaDespCells += `<td style="padding:4px;min-width:70px">
+      <input type="number" class="orc-input orc-row-input"
+        data-cc="${cc}" data-kpi="meta_desp" data-tipo="plan" data-mes="${i}"
+        value="${planVal || ''}" min="0" step="1" placeholder="—"
+        title="Meta de Despesas ${MESES[i]}">
+      <input type="number" class="orc-input auto" value="${realVal.toFixed(0)}" title="Custos reais Nibo ${MESES[i]}">
+      ${deltaHtml}
+    </td>`;
+  }
+  const metaDespRow = `
+    <tr style="background:#fff7ed">
+      <td class="td-kpi-label" style="background:#fff7ed;color:#c2410c">📉 Meta de Despesas (R$) <span style="font-size:10px;font-weight:400;color:#c2410c">(P = meta / R = Nibo auto)</span></td>
+      ${metaDespCells}
+    </tr>`;
+
   document.getElementById('orc-container').innerHTML = `
     <div style="background:white;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
       <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
@@ -2029,6 +2076,7 @@ function renderOrcTabela(cc) {
           </thead>
           <tbody>
             ${rows}
+            ${metaDespRow}
             ${totalNiboRow}
           </tbody>
         </table>

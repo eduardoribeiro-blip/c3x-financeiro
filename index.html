@@ -1885,16 +1885,21 @@ function renderOrcGeral() {
     }
 
     const ORDER = ['rec','outrec','ded','cus','desp','inv'];
-    const known = ORDER.map(id => byId[id]).filter(Boolean);
+    // Garantir que todas as seções do ORDER existam em byId (evita que .filter(Boolean) remova outrec)
+    ORDER.forEach(id => { if (!byId[id]) byId[id] = { ...DISPLAY_DEFS[id], cats: [] }; });
+    const known = ORDER.map(id => byId[id]); // todas existem agora
     const extra = Object.values(byId).filter(s => !ORDER.includes(s.id));
     secoesRender = [...known, ...extra];
 
-    // Enriquecer com categorias dos lançamentos não cobertas pela API
+    // Enriquecer com categorias dos lançamentos/cache não cobertas pela API
     const allAPI = new Set(secoesRender.flatMap(s => s.cats));
-    const xRec  = Object.keys(REAL.categoriasRec || {}).filter(c => !allAPI.has(c));
-    const xDesp = Object.keys(REAL.categorias   || {}).filter(c => !allAPI.has(c));
-    if (xRec.length)  { if (!byId.rec)  byId.rec  = { ...DISPLAY_DEFS.rec,  cats:[] }; byId.rec.cats.push(...xRec); }
-    if (xDesp.length) { if (!byId.desp) byId.desp = { ...DISPLAY_DEFS.desp, cats:[] }; byId.desp.cats.push(...xDesp); }
+    const xRec    = Object.keys(REAL.categoriasRec || {}).filter(c => !allAPI.has(c));
+    const xDesp   = Object.keys(REAL.categorias   || {}).filter(c => !allAPI.has(c));
+    // Cats tipo 'in' do cache Nibo que não foram distribuídas para nenhuma seção → vão para outrec
+    const xOutRec = [...new Set(cached.rec)].filter(c => !allAPI.has(c) && !xRec.includes(c));
+    if (xRec.length)    byId.rec.cats.push(...xRec);
+    if (xDesp.length)   byId.desp.cats.push(...xDesp);
+    if (xOutRec.length) byId.outrec.cats.push(...xOutRec);
   } else {
     console.warn('[OrcGeral] FALLBACK: secoesAPI vazio — usando ORC_GERAL_SECOES hardcoded');
     const catsFixas = new Set(ORC_GERAL_SECOES.flatMap(s => s.cats));
@@ -1951,7 +1956,7 @@ function renderOrcGeral() {
   }
 
   let tbody = '';
-  for (const sec of secoesRender) {
+  for (const sec of secoesRender.filter(s => s.cats.length > 0)) {
     tbody += `<tr class="orc-section-header"><td colspan="14">${sec.label}</td></tr>`;
     for (const c of sec.cats) tbody += catRow(c);
     tbody += subtotalRow(sec.sub.label, sec.cats, sec.sub.bg, sec.sub.color);
@@ -1976,8 +1981,9 @@ function renderOrcGeral() {
   tbody += `<tr class="orc-section-header"><td colspan="14">RESULTADO OPERACIONAL</td></tr>
     <tr><td class="td-kpi-label" style="background:#eff6ff;font-weight:700;color:#1d4ed8">Resultado Operacional</td>${resCells}</tr>`;
 
+  const secoesVisiveis = secoesRender.filter(s => s.cats.length > 0);
   const modoLabel = Object.keys(secoesAPI).length > 0
-    ? `API Nibo ✓ ${secoesRender.length} seções / ${secoesRender.reduce((s,x)=>s+x.cats.length,0)} cats`
+    ? `API Nibo ✓ ${secoesVisiveis.map(s=>s.label).join(' → ')}`
     : '⚠ Fallback hardcoded';
   console.log('[OrcGeral] renderizado:', secoesRender.map(s=>`${s.label}(${s.cats.length})`).join(' | '));
 

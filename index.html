@@ -207,6 +207,10 @@ tr:hover td { background: #f9fafb; }
 .dias-badge.d60  { background: #ffedd5; color: #9a3412; }
 .dias-badge.d90  { background: #fee2e2; color: #991b1b; }
 .dias-badge.d90p { background: #1f2937; color: #f9fafb; }
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort:hover { color: var(--text); background: #f1f5f9 !important; }
+.inadim-filter-input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 11px; font-family: 'Inter', sans-serif; color: var(--text); outline: none; background: white; }
+.inadim-filter-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
 
 @media (max-width: 768px) {
   #sidebar { display: none !important; }
@@ -641,16 +645,7 @@ tr:hover td { background: #f9fafb; }
       <div class="inadim-tabs" id="inadim-tabs"></div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Descrição</th>
-              <th>Centro de Custo</th>
-              <th>Vencimento</th>
-              <th>Atraso</th>
-              <th style="text-align:right">Valor</th>
-            </tr>
-          </thead>
+          <thead id="inadim-thead"></thead>
           <tbody id="inadim-tbody"></tbody>
         </table>
       </div>
@@ -990,6 +985,8 @@ async function carregarNibo() {
 ═══════════════════════════════════════════ */
 let INADIM_FILTRO = 'todos';
 let INADIM_ABA    = 'geral';
+let INADIM_SEARCH = { cliente: '', descricao: '', cc: '', vencimento: '' };
+let INADIM_SORT   = { col: 'diasAtraso', dir: 'desc' };
 
 function inadimDiasBadge(dias) {
   if (dias <= 30)  return `<span class="dias-badge d30">${dias}d</span>`;
@@ -1012,20 +1009,62 @@ function inadimSetAba(aba, el) {
   inadimRenderTabela();
 }
 
+function inadimSetSort(col) {
+  if (INADIM_SORT.col === col) {
+    INADIM_SORT.dir = INADIM_SORT.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    INADIM_SORT.col = col;
+    INADIM_SORT.dir = (col === 'diasAtraso' || col === 'valor') ? 'desc' : 'asc';
+  }
+  inadimRenderTabela();
+}
+
+function inadimSetSearch(field, val) {
+  INADIM_SEARCH[field] = val.toLowerCase().trim();
+  inadimRenderTabela();
+}
+
+function inadimUpdateSortIcons() {
+  ['cliente','descricao','cc','vencimento','diasAtraso','valor'].forEach(col => {
+    const el = document.getElementById('inadim-si-' + col);
+    if (!el) return;
+    if (INADIM_SORT.col !== col) {
+      el.innerHTML = '<span style="opacity:0.3;font-size:9px;margin-left:3px">↕</span>';
+    } else {
+      el.innerHTML = `<span style="color:var(--blue);font-size:9px;margin-left:3px">${INADIM_SORT.dir==='asc'?'↑':'↓'}</span>`;
+    }
+  });
+}
+
+function inadimBuildThead() {
+  document.getElementById('inadim-thead').innerHTML = `
+    <tr>
+      <th class="th-sort" onclick="inadimSetSort('cliente')">Cliente<span id="inadim-si-cliente"></span></th>
+      <th class="th-sort" onclick="inadimSetSort('descricao')">Descrição<span id="inadim-si-descricao"></span></th>
+      <th class="th-sort" onclick="inadimSetSort('cc')">Centro de Custo<span id="inadim-si-cc"></span></th>
+      <th class="th-sort" onclick="inadimSetSort('vencimento')">Vencimento<span id="inadim-si-vencimento"></span></th>
+      <th class="th-sort" onclick="inadimSetSort('diasAtraso')">Atraso<span id="inadim-si-diasAtraso"></span></th>
+      <th class="th-sort" style="text-align:right" onclick="inadimSetSort('valor')">Valor<span id="inadim-si-valor"></span></th>
+    </tr>
+    <tr style="background:#f9fafb">
+      <td style="padding:4px 8px"><input class="inadim-filter-input" type="text" placeholder="Filtrar nome…" oninput="inadimSetSearch('cliente',this.value)"></td>
+      <td style="padding:4px 8px"><input class="inadim-filter-input" type="text" placeholder="Filtrar descrição…" oninput="inadimSetSearch('descricao',this.value)"></td>
+      <td style="padding:4px 8px"><input class="inadim-filter-input" type="text" placeholder="Filtrar CC…" oninput="inadimSetSearch('cc',this.value)"></td>
+      <td style="padding:4px 8px"><input class="inadim-filter-input" type="text" placeholder="Ex: 01/2026" oninput="inadimSetSearch('vencimento',this.value)"></td>
+      <td></td>
+      <td></td>
+    </tr>`;
+  inadimUpdateSortIcons();
+}
+
 function inadimRenderTabela() {
   const eGeral = INADIM_ABA === 'geral';
-
-  // Filtrar por aba CC
   let itens = eGeral ? INADIM_ITENS : INADIM_ITENS.filter(i => i.cc === INADIM_ABA);
 
-  // Na aba Geral, deduplicar por scheduleId (item pode pertencer a múltiplos CCs)
+  // Deduplicar na visão Geral
   if (eGeral) {
     const seen = new Set();
-    itens = itens.filter(i => {
-      if (seen.has(i.scheduleId)) return false;
-      seen.add(i.scheduleId);
-      return true;
-    });
+    itens = itens.filter(i => { if (seen.has(i.scheduleId)) return false; seen.add(i.scheduleId); return true; });
   }
 
   // Filtrar por faixa de dias
@@ -1034,8 +1073,26 @@ function inadimRenderTabela() {
   if (INADIM_FILTRO === '90')  itens = itens.filter(i => i.diasAtraso > 60 && i.diasAtraso <= 90);
   if (INADIM_FILTRO === '90p') itens = itens.filter(i => i.diasAtraso > 90);
 
-  // Ordenar por dias em atraso (maior primeiro)
-  itens = [...itens].sort((a, b) => b.diasAtraso - a.diasAtraso);
+  // Filtrar por texto
+  if (INADIM_SEARCH.cliente)    itens = itens.filter(i => i.cliente.toLowerCase().includes(INADIM_SEARCH.cliente));
+  if (INADIM_SEARCH.descricao)  itens = itens.filter(i => i.descricao.toLowerCase().includes(INADIM_SEARCH.descricao));
+  if (INADIM_SEARCH.cc)         itens = itens.filter(i => i.cc.toLowerCase().includes(INADIM_SEARCH.cc));
+  if (INADIM_SEARCH.vencimento) itens = itens.filter(i => i.vencimento.toLocaleDateString('pt-BR').includes(INADIM_SEARCH.vencimento));
+
+  // Ordenar
+  itens = [...itens].sort((a, b) => {
+    const col = INADIM_SORT.col;
+    let va, vb;
+    if      (col === 'vencimento')  { va = a.vencimento.getTime(); vb = b.vencimento.getTime(); }
+    else if (col === 'diasAtraso')  { va = a.diasAtraso;  vb = b.diasAtraso; }
+    else if (col === 'valor')       { va = a.valor;        vb = b.valor; }
+    else                            { va = (a[col]||'').toLowerCase(); vb = (b[col]||'').toLowerCase(); }
+    if (va < vb) return INADIM_SORT.dir === 'asc' ? -1 : 1;
+    if (va > vb) return INADIM_SORT.dir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  inadimUpdateSortIcons();
 
   const totalFiltrado = itens.reduce((s, i) => s + i.valor, 0);
   document.getElementById('inadim-count-label').textContent =
@@ -1051,7 +1108,7 @@ function inadimRenderTabela() {
     const venc = item.vencimento.toLocaleDateString('pt-BR');
     return `<tr>
       <td><strong>${item.cliente}</strong></td>
-      <td style="color:var(--text2);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.descricao}</td>
+      <td style="color:var(--text2);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${item.descricao}">${item.descricao}</td>
       <td><span style="font-size:11px;background:#f3f4f6;padding:2px 8px;border-radius:10px;color:var(--text2)">${item.cc}</span></td>
       <td style="color:var(--amber);white-space:nowrap">${venc}</td>
       <td>${inadimDiasBadge(item.diasAtraso)}</td>
@@ -1064,6 +1121,7 @@ function renderInadim() {
   if (!INADIM_ITENS.length) {
     document.getElementById('inadim-kpis').innerHTML =
       `<div class="kpi-card"><div class="kpi-value" style="color:var(--text2)">—</div><div class="kpi-sub neu">Sem inadimplência registrada</div></div>`;
+    inadimBuildThead();
     document.getElementById('inadim-tbody').innerHTML =
       '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text2)">Sem inadimplência registrada.</td></tr>';
     document.getElementById('inadim-tabs').innerHTML = '';
@@ -1128,6 +1186,7 @@ function renderInadim() {
     b.classList.toggle('active', b.getAttribute('data-f') === INADIM_FILTRO);
   });
 
+  inadimBuildThead();
   inadimRenderTabela();
 }
 

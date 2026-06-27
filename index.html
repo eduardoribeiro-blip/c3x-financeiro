@@ -212,6 +212,33 @@ tr:hover td { background: #f9fafb; }
 .inadim-filter-input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 11px; font-family: 'Inter', sans-serif; color: var(--text); outline: none; background: white; }
 .inadim-filter-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
 
+/* DIAGNÓSTICO */
+.diag-tabs { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.5rem;overflow-x:auto }
+.diag-aba-btn { padding:9px 18px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:color .15s;font-family:'Inter',sans-serif }
+.diag-aba-btn:hover { color:var(--text) }
+.diag-aba-btn.active { color:#7c3aed;border-bottom-color:#7c3aed;font-weight:600 }
+.diag-card { background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:1rem;overflow:hidden }
+.diag-card-header { display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:#fafafa }
+.diag-card-body { padding:20px }
+.diag-mes-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0 }
+.diag-mes-label { font-size:13px;font-weight:700;color:var(--text);letter-spacing:.03em }
+.diag-mini-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px }
+.diag-mini-kpi { text-align:center;padding:10px 6px;background:#f9fafb;border-radius:8px;border:1px solid var(--border) }
+.diag-mini-label { font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px }
+.diag-mini-value { font-size:14px;font-weight:700 }
+.diag-para { font-size:13px;line-height:1.75;color:var(--text);margin-bottom:10px }
+.diag-para:last-of-type { margin-bottom:0 }
+.diag-rec-box { margin-top:14px;padding:11px 15px;background:#f5f3ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0 }
+.diag-rec-title { font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px }
+.diag-rec-item { font-size:12px;color:#4c1d95;margin-bottom:4px;line-height:1.5 }
+.diag-rec-item:last-child { margin-bottom:0 }
+.diag-saude { display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700 }
+.diag-saude-verde   { background:#dcfce7;color:#166534 }
+.diag-saude-amarelo { background:#fef9c3;color:#854d0e }
+.diag-saude-vermelho{ background:#fee2e2;color:#991b1b }
+.diag-saude-cinza   { background:#f3f4f6;color:#6b7280 }
+.diag-sem-dados { text-align:center;padding:3rem;color:var(--text2);font-size:14px }
+
 @media (max-width: 768px) {
   #sidebar { display: none !important; }
   #main { margin-left: 0 !important; }
@@ -277,6 +304,10 @@ tr:hover td { background: #f9fafb; }
     <a href="#" onclick="goPage('inadim',this)">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
       Inadimplência
+    </a>
+    <a href="#" onclick="goPage('diagnostico',this)">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
+      Insights
     </a>
   </div>
   <div class="sidebar-section">Serviços</div>
@@ -618,6 +649,17 @@ tr:hover td { background: #f9fafb; }
 
     <!-- Tabela de orçamento -->
     <div id="orc-container"></div>
+  </div>
+
+  <!-- PAGE: INSIGHTS FINANCEIROS -->
+  <div class="page" id="page-diagnostico">
+    <div class="page-header">
+      <div class="page-badge" style="background:#f5f3ff;color:#7c3aed">Análise</div>
+      <h1 class="page-title">Insights Financeiros</h1>
+      <p class="page-sub">Análise mensal do negócio e de cada centro de custo — perspectiva financeira especializada baseada nos dados do Nibo.</p>
+    </div>
+    <div class="diag-tabs" id="diag-tabs"></div>
+    <div id="diag-content"></div>
   </div>
 
   <!-- PAGE: INADIMPLÊNCIA -->
@@ -981,6 +1023,315 @@ async function carregarNibo() {
    RENDER PÁGINAS
 ═══════════════════════════════════════════ */
 /* ═══════════════════════════════════════════
+   DIAGNÓSTICO FINANCEIRO
+═══════════════════════════════════════════ */
+let DIAG_ABA = 'geral';
+
+function diagSaudeBadge(saude) {
+  const m = { verde:'Positivo', amarelo:'Atenção', vermelho:'Crítico', cinza:'Sem dados' };
+  return `<span class="diag-saude diag-saude-${saude}">${m[saude]||'—'}</span>`;
+}
+
+function diagMini(label, valor, cor) {
+  return `<div class="diag-mini-kpi">
+    <div class="diag-mini-label">${label}</div>
+    <div class="diag-mini-value" style="color:${cor}">${valor}</div>
+  </div>`;
+}
+
+// Calcula saúde do mês baseado em múltiplos critérios
+function diagSaude(rec, desp, ating, margem) {
+  if (rec === 0 && desp === 0) return 'cinza';
+  const res = rec - desp;
+  if (res < 0) return 'vermelho';
+  if (ating !== null && ating < 75) return 'vermelho';
+  if ((ating !== null && ating < 93) || (margem !== null && margem < 35)) return 'amarelo';
+  return 'verde';
+}
+
+// Análise do negócio geral para um mês
+function gerarAnaliseGeral(mes) {
+  const rec      = REAL.receita[mes]  || 0;
+  const desp     = REAL.despesa[mes]  || 0;
+  const recProj  = PROJ.receita[mes]  || 0;
+  const despProj = PROJ.despesa[mes]  || 0;
+  const res      = rec - desp;
+  const margem   = rec > 0 ? (rec - desp) / rec * 100 : null;
+  const ating    = recProj > 0 ? rec / recProj * 100 : null;
+
+  const prev     = mes > 0 ? mes - 1 : -1;
+  const recPrev  = prev >= 0 ? (REAL.receita[prev]  || 0) : 0;
+  const despPrev = prev >= 0 ? (REAL.despesa[prev] || 0) : 0;
+  const momRec   = recPrev  > 0 ? (rec  - recPrev)  / recPrev  * 100 : null;
+  const momDesp  = despPrev > 0 ? (desp - despPrev) / despPrev * 100 : null;
+
+  const inadimMes = Object.values(CC_INADIM).reduce((s, cc) => s + (cc.porMes[mes] || 0), 0);
+
+  if (rec === 0 && desp === 0) return null;
+
+  const saude = diagSaude(rec, desp, ating, margem);
+  const paras = [], recs = [];
+
+  // § Receita
+  {
+    let p = '';
+    if (ating !== null) {
+      const gap = Math.abs(ating - 100).toFixed(1);
+      if (ating >= 100) {
+        p = `A receita recebida de <strong>${fmtFull(rec)}</strong> superou a projeção em <strong>${gap}%</strong> (meta: ${fmtFull(recProj)})`;
+      } else if (ating >= 90) {
+        p = `A receita recebida de <strong>${fmtFull(rec)}</strong> ficou <strong>${gap}%</strong> abaixo da projeção de ${fmtFull(recProj)}, desempenho dentro da faixa aceitável`;
+      } else if (ating >= 75) {
+        p = `A receita recebida de <strong>${fmtFull(rec)}</strong> atingiu ${ating.toFixed(1)}% da meta de ${fmtFull(recProj)}, ficando ${fmtFull(recProj - rec)} abaixo do projetado — desvio relevante que merece investigação`;
+        recs.push(`Lacuna de receita de ${fmtFull(recProj - rec)} — revisar pipeline comercial e estratégias de conversão para recuperar o gap no acumulado.`);
+      } else {
+        p = `A receita recebida de <strong>${fmtFull(rec)}</strong> atingiu apenas <strong>${ating.toFixed(1)}%</strong> da meta de ${fmtFull(recProj)}, desvio crítico de ${fmtFull(recProj - rec)}`;
+        recs.push(`Desvio crítico de receita: apenas ${ating.toFixed(1)}% da meta atingida. Acionar plano de emergência comercial e revisar premissas do orçamento.`);
+      }
+    } else {
+      p = `A receita recebida totalizou <strong>${fmtFull(rec)}</strong> no período`;
+    }
+    if (momRec !== null && recPrev > 0) {
+      const sinal = momRec >= 0 ? '+' : '';
+      const obs = momRec >= 15 ? ', forte crescimento sequencial' : momRec >= 5 ? ', trajetória de crescimento saudável' : momRec >= -5 ? ', desempenho estável' : momRec >= -15 ? ', leve recuo frente ao mês anterior' : ', queda sequencial relevante que requer atenção';
+      p += ` (variação mensal: <strong>${sinal}${momRec.toFixed(1)}%</strong>${obs})`;
+    }
+    paras.push(p + '.');
+  }
+
+  // § Custos e Margem
+  if (desp > 0) {
+    let p = `As despesas operacionais totalizaram <strong>${fmtFull(desp)}</strong>`;
+    if (despProj > 0) {
+      const despVar = (desp / despProj - 1) * 100;
+      if (despVar > 20) {
+        p += `, <strong>${despVar.toFixed(1)}%</strong> acima do orçado — extrapolação preocupante`;
+        recs.push(`Despesas ${despVar.toFixed(1)}% acima do orçado — identificar centros de custo com maior desvio e aplicar contingenciamento.`);
+      } else if (despVar > 10) {
+        p += `, ${despVar.toFixed(1)}% acima do orçado`;
+      } else if (despVar < -15) {
+        p += `, com expressiva contenção de ${Math.abs(despVar).toFixed(1)}% abaixo do orçado — excelente disciplina de custos`;
+      } else if (despVar < -5) {
+        p += `, ${Math.abs(despVar).toFixed(1)}% abaixo do orçado, refletindo boa gestão de custos`;
+      } else {
+        p += `, dentro do orçado`;
+      }
+    }
+    if (margem !== null) {
+      const mObs = margem >= 55 ? `nível excepcional — cada R$1,00 de receita gera R$${(margem/100).toFixed(2)} de margem`
+                  : margem >= 45 ? `patamar saudável, bem acima da referência de 40%`
+                  : margem >= 40 ? `no limite superior do alvo de 40%, operação equilibrada`
+                  : margem >= 30 ? `abaixo do alvo de 40%, sinalizando pressão de custos sobre a operação`
+                  : margem >= 15 ? `em nível preocupante — custos estão consumindo ${(100-margem).toFixed(1)}% da receita`
+                  : `crítico — a estrutura de custos é insustentável no modelo atual`;
+      p += `. Margem de contribuição de <strong>${margem.toFixed(1)}%</strong> — ${mObs}`;
+      if (margem < 40) recs.push(`Margem de ${margem.toFixed(1)}% abaixo da meta de 40%: revisar precificação e/ou estrutura de custos variáveis.`);
+    }
+    if (momDesp !== null && despPrev > 0 && Math.abs(momDesp) > 10) {
+      p += `. As despesas ${momDesp > 0 ? 'cresceram' : 'recuaram'} ${Math.abs(momDesp).toFixed(1)}% em relação ao mês anterior`;
+    }
+    paras.push(p + '.');
+  }
+
+  // § Resultado e Inadimplência
+  {
+    let p = '';
+    if (res >= 0) {
+      const pefic = rec > 0 ? (res / rec * 100).toFixed(1) : 0;
+      p = `O resultado operacional foi <strong>superavitário em ${fmtFull(res)}</strong> (${pefic}% da receita), demonstrando capacidade de geração de caixa`;
+    } else {
+      p = `O resultado operacional foi <strong>deficitário em ${fmtFull(Math.abs(res))}</strong>, indicando que as despesas superaram a receita recebida no período`;
+      recs.push('Resultado negativo: avaliar alocação de custos fixos e acelerar captação de receita para recuperar o equilíbrio operacional.');
+    }
+    if (inadimMes > 0) {
+      const totalFat = rec + inadimMes;
+      const pctI = totalFat > 0 ? inadimMes / totalFat * 100 : 0;
+      p += `. A inadimplência gerada no mês somou <strong>${fmtFull(inadimMes)}</strong>`;
+      if (pctI > 15) {
+        p += ` (${pctI.toFixed(1)}% do faturamento bruto), nível crítico que compromete materialmente o fluxo de caixa`;
+        recs.push(`Inadimplência de ${pctI.toFixed(1)}% é crítica — acionar cobrança imediata e avaliar renegociação dos maiores devedores.`);
+      } else if (pctI > 8) {
+        p += ` (${pctI.toFixed(1)}% do faturamento bruto), nível elevado que merece acompanhamento ativo da carteira`;
+        recs.push(`Inadimplência de ${pctI.toFixed(1)}%: intensificar rotina de cobrança e mapear devedores com risco de insolvência.`);
+      } else {
+        p += ` (${pctI.toFixed(1)}% do faturamento), dentro de patamar administrável`;
+      }
+    }
+    paras.push(p + '.');
+  }
+
+  return { saude, paras, recs, metrics: { rec, recProj, desp, despProj, res, margem, ating, inadimMes } };
+}
+
+// Análise de um CC específico para um mês
+function gerarAnaliseCC(cc, mes) {
+  const rec   = CC_RECEITA[cc] ? (CC_RECEITA[cc][mes] || 0) : 0;
+  const desp  = CC_DATA[cc]    ? (CC_DATA[cc].desp[mes] || 0) : 0;
+  const res   = rec - desp;
+  const margem = rec > 0 ? (rec - desp) / rec * 100 : null;
+
+  const prev     = mes > 0 ? mes - 1 : -1;
+  const recPrev  = prev >= 0 && CC_RECEITA[cc] ? (CC_RECEITA[cc][prev] || 0) : 0;
+  const momRec   = recPrev > 0 ? (rec - recPrev) / recPrev * 100 : null;
+
+  const inadimMes = CC_INADIM[cc] ? (CC_INADIM[cc].porMes[mes] || 0) : 0;
+  const metaRec   = projRecCC(cc, mes);
+  const recTotal  = rec + inadimMes;
+  const atingMeta = metaRec ? (recTotal / metaRec * 100) : null;
+
+  const recGeral    = REAL.receita[mes] || 0;
+  const contribPct  = recGeral > 0 && rec > 0 ? rec / recGeral * 100 : null;
+
+  if (rec === 0 && desp === 0) return null;
+
+  const saude = diagSaude(rec, desp, atingMeta, margem);
+  const paras = [], recs = [];
+
+  // § Receita e posição no negócio
+  {
+    let p = '';
+    if (rec > 0) {
+      p = `A receita recebida foi de <strong>${fmtFull(rec)}</strong>`;
+      if (contribPct !== null) p += `, representando <strong>${contribPct.toFixed(1)}%</strong> da receita total do negócio no mês`;
+      if (momRec !== null && recPrev > 0) {
+        const sinal = momRec >= 0 ? '+' : '';
+        const obs = momRec >= 20 ? ', crescimento expressivo' : momRec >= 5 ? ', trajetória positiva' : momRec >= -5 ? ', desempenho estável' : momRec >= -20 ? ', recuo que merece monitoramento' : ', queda relevante';
+        p += ` (MoM: <strong>${sinal}${momRec.toFixed(1)}%</strong>${obs})`;
+      }
+    } else {
+      p = `Nenhuma receita foi recebida em ${MESES_FULL[mes]}`;
+      if (desp > 0) recs.push('Centro sem receita no mês — avaliar timing de recebimentos e verificar se há lançamentos pendentes de baixa no Nibo.');
+    }
+    if (metaRec && atingMeta !== null) {
+      if (atingMeta >= 100) {
+        p += `. A receita total (recebida + inadimplência) de ${fmtFull(recTotal)} atingiu <strong>${atingMeta.toFixed(1)}%</strong> da meta — resultado acima do esperado`;
+      } else if (atingMeta >= 85) {
+        p += `. A receita total atingiu <strong>${atingMeta.toFixed(1)}%</strong> da meta de ${fmtFull(metaRec)}, desempenho próximo ao planejado`;
+      } else {
+        p += `. A receita total atingiu apenas <strong>${atingMeta.toFixed(1)}%</strong> da meta de ${fmtFull(metaRec)}, gap de ${fmtFull(metaRec - recTotal)}`;
+        recs.push(`Atingimento de ${atingMeta.toFixed(1)}% da meta — revisar estratégia de captação e conversão para este centro.`);
+      }
+    }
+    paras.push(p + '.');
+  }
+
+  // § Despesas, Margem e Resultado
+  if (desp > 0) {
+    let p = `As despesas alocadas foram de <strong>${fmtFull(desp)}</strong>`;
+    if (rec > 0 && margem !== null) {
+      if (margem >= 55)       p += `, resultando em margem de contribuição excelente de <strong>${margem.toFixed(1)}%</strong>`;
+      else if (margem >= 40)  p += `, com margem de contribuição saudável de <strong>${margem.toFixed(1)}%</strong>`;
+      else if (margem >= 20)  {
+        p += `, gerando margem de <strong>${margem.toFixed(1)}%</strong> — abaixo do alvo de 40%, indicando que os custos do centro estão elevados em relação à receita`;
+        recs.push(`Margem de ${margem.toFixed(1)}%: analisar composição de custos deste centro e oportunidades de eficiência.`);
+      } else if (margem >= 0) {
+        p += `. A margem de <strong>${margem.toFixed(1)}%</strong> está em nível crítico — quase toda a receita está sendo consumida por despesas`;
+        recs.push(`Margem de ${margem.toFixed(1)}%: estrutura de custos insustentável. Necessário revisão urgente de precificação e/ou corte de despesas.`);
+      } else {
+        p += `. O centro operou no <strong>vermelho</strong> — as despesas superaram a receita em ${fmtFull(Math.abs(res))}`;
+        recs.push(`Resultado negativo: avaliar imediatamente se os custos são fixos ou variáveis e definir plano de reequilíbrio.`);
+      }
+    } else if (rec === 0) {
+      p += `. Sem receita no período, o centro gerou um déficit de ${fmtFull(desp)}`;
+    }
+    if (inadimMes > 0) {
+      p += `. A inadimplência do mês somou <strong>${fmtFull(inadimMes)}</strong>`;
+      if (rec > 0) {
+        const pctI = inadimMes / (rec + inadimMes) * 100;
+        p += ` (${pctI.toFixed(1)}% do faturamento bruto)`;
+        if (pctI > 15) recs.push(`Inadimplência de ${pctI.toFixed(1)}% — priorizar cobrança neste centro de custo.`);
+      }
+    }
+    paras.push(p + '.');
+  }
+
+  return { saude, paras, recs, metrics: { rec, desp, res, margem, atingMeta, metaRec, inadimMes } };
+}
+
+function diagSetAba(aba, el) {
+  DIAG_ABA = aba;
+  document.querySelectorAll('.diag-aba-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  diagRenderConteudo();
+}
+
+function diagRenderConteudo() {
+  const container = document.getElementById('diag-content');
+  if (!container) return;
+  const isGeral = DIAG_ABA === 'geral';
+  const cards = [];
+
+  for (let mes = 0; mes < 12; mes++) {
+    const analise = isGeral ? gerarAnaliseGeral(mes) : gerarAnaliseCC(DIAG_ABA, mes);
+    if (!analise) continue;
+
+    const { saude, paras, recs, metrics } = analise;
+    const { rec, recProj, desp, despProj, res, margem, ating, atingMeta, inadimMes } = metrics;
+
+    const col = (v, pos, neg) => (v||0) >= 0 ? pos : neg;
+    const miniGrid = isGeral
+      ? `<div class="diag-mini-grid">
+          ${diagMini('Receita',    fmtFull(rec),    'var(--green)')}
+          ${diagMini('Despesa',    fmtFull(desp),   'var(--red)')}
+          ${diagMini('Resultado',  fmtFull(res),    col(res,'var(--green)','var(--red)'))}
+          ${diagMini('Margem',     margem!==null ? margem.toFixed(1)+'%' : '—', (margem||0)>=40?'var(--green)':'var(--amber)')}
+        </div>`
+      : `<div class="diag-mini-grid">
+          ${diagMini('Receita',    fmtFull(rec),    'var(--green)')}
+          ${diagMini('Despesa',    fmtFull(desp),   'var(--red)')}
+          ${diagMini('Resultado',  fmtFull(res),    col(res,'var(--green)','var(--red)'))}
+          ${diagMini('Ating. Meta', atingMeta!==null ? atingMeta.toFixed(1)+'%' : '—', (atingMeta||0)>=100?'var(--green)':'var(--amber)')}
+        </div>`;
+
+    const recBox = recs.length > 0
+      ? `<div class="diag-rec-box">
+          <div class="diag-rec-title">Recomendações</div>
+          ${recs.map(r => `<div class="diag-rec-item">• ${r}</div>`).join('')}
+        </div>`
+      : '';
+
+    const dotCor = saude==='verde'?'var(--green)':saude==='amarelo'?'var(--amber)':'var(--red)';
+    cards.push(`
+      <div class="diag-card">
+        <div class="diag-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="diag-mes-dot" style="background:${dotCor}"></div>
+            <span class="diag-mes-label">${MESES_FULL[mes].toUpperCase()} 2026</span>
+          </div>
+          ${diagSaudeBadge(saude)}
+        </div>
+        <div class="diag-card-body">
+          ${miniGrid}
+          ${paras.map(p => `<p class="diag-para">${p}</p>`).join('')}
+          ${recBox}
+        </div>
+      </div>`);
+  }
+
+  container.innerHTML = cards.length > 0
+    ? cards.join('')
+    : '<div class="diag-sem-dados">Sem dados suficientes para análise.</div>';
+}
+
+function renderDiagnostico() {
+  const ccs = [...new Set([
+    ...Object.keys(CC_RECEITA || {}),
+    ...Object.keys(CC_DATA || {})
+  ])].filter(cc =>
+    (CC_RECEITA[cc] && CC_RECEITA[cc].some(v => v > 0)) ||
+    (CC_DATA[cc] && CC_DATA[cc].desp.some(v => v > 0))
+  ).sort();
+
+  document.getElementById('diag-tabs').innerHTML =
+    `<button class="diag-aba-btn${DIAG_ABA==='geral'?' active':''}" onclick="diagSetAba('geral',this)">Negócio Geral</button>` +
+    ccs.map(cc =>
+      `<button class="diag-aba-btn${DIAG_ABA===cc?' active':''}" onclick="diagSetAba('${cc.replace(/'/g,"\\'")}',this)">${cc}</button>`
+    ).join('');
+
+  diagRenderConteudo();
+}
+
+/* ═══════════════════════════════════════════
    INADIMPLÊNCIA
 ═══════════════════════════════════════════ */
 let INADIM_FILTRO = 'todos';
@@ -1201,6 +1552,7 @@ function renderTudo() {
   renderConfig();
   renderOrcamento();
   renderInadim();
+  renderDiagnostico();
   // Re-renderizar página de serviço se estiver aberta
   const paginaAtiva = document.querySelector('.page.active');
   if (paginaAtiva && paginaAtiva.id === 'page-servicos-cc' && CC_ATUAL) {

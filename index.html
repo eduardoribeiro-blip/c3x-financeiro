@@ -1090,25 +1090,13 @@ async function carregarNibo() {
     } catch(e) { console.warn('[Fluxo entries] falhou:', JSON.stringify(ep), e.message); }
   }
 
-  // Calcular saldo de abertura 01/Jan/2026: saldo_atual − net_realizados_2026
-  if (SALDO_ASAAS_ATUAL !== null) {
-    const _tD = s => { const dt=new Date(s); return new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()); };
-    let _net = 0;
-    for (const item of (creditData.items||[])) {
-      const ok = item.isPaid===true||item.isEntry===true; if (!ok) continue;
-      const v  = Math.abs(item.value||0); if (!v) continue;
-      const d  = _dataCaixa(item); if (!d) continue;
-      if (_tD(new Date(d)).getFullYear()===2026) _net += v;
-    }
-    for (const item of (debitData.items||[])) {
-      const ok = item.isPaid===true||(item.isPaid==null&&Math.abs(item.openValue||0)===0&&Math.abs(item.value||0)>0);
-      if (!ok) continue;
-      const d = item.isPaid===true?(item.paymentDate||item.dueDate||item.scheduleDate):(item.dueDate||item.scheduleDate);
-      if (!d) continue;
-      if (_tD(new Date(d)).getFullYear()===2026) _net -= Math.abs(item.value||0);
-    }
-    SALDO_INICIAL_2026 = SALDO_ASAAS_ATUAL - _net;
-    console.log('[Fluxo] Saldo atual:', SALDO_ASAAS_ATUAL.toFixed(2), '| Net 2026:', _net.toFixed(2), '| Abertura 01/Jan:', SALDO_INICIAL_2026.toFixed(2));
+  // Saldo de abertura 01/Jan/2026 — via localStorage (configurável pelo usuário)
+  // Não é possível calcular via fórmula: schedules não têm accountId, então
+  // o net2026 de todas as contas não corresponde ao net só da Recebimentos Asaas.
+  {
+    const stored = parseFloat(localStorage.getItem('c3x_saldo_abertura_asaas') || '');
+    SALDO_INICIAL_2026 = isNaN(stored) ? 14426.68 : stored;
+    console.log('[Fluxo] Saldo abertura Jan/2026:', SALDO_INICIAL_2026, '| Fonte:', isNaN(stored)?'default':'localStorage');
   }
 
   // Resultado
@@ -2154,6 +2142,18 @@ function fluxoToggleDrill(key) {
   fluxoRenderTabela(fluxoAgregarDados(fluxoGerarSemanas(from, to), FLUXO_ABA));
 }
 
+function fluxoEditarAbertura() {
+  const atual = SALDO_INICIAL_2026.toFixed(2).replace('.', ',');
+  const val = prompt('Saldo de abertura em 01/Jan/2026 (Recebimentos Asaas):\nConsulte o extrato do mês anterior no Nibo.', atual);
+  if (val === null) return;
+  // Aceita formato BR (1.234,56) ou US (1234.56)
+  const v = parseFloat(val.trim().replace(/\./g,'').replace(',','.'));
+  if (isNaN(v) || v < 0) { alert('Valor inválido.'); return; }
+  SALDO_INICIAL_2026 = v;
+  localStorage.setItem('c3x_saldo_abertura_asaas', v.toString());
+  renderFluxo();
+}
+
 function fluxoSetAba(aba, el) {
   FLUXO_ABA   = aba;
   FLUXO_DRILL = null;
@@ -2213,13 +2213,12 @@ function renderFluxo() {
       <div class="kpi-proj">${semsNeg} semana(s) deficitária(s)</div>
       <div class="kpi-delta ${semsPos >= semsNeg?'pos':'neg'}">${semanas.length > 0 ? Math.round(semsPos/semanas.length*100) : 0}% positivas</div>
     </div>
-    ${SALDO_ASAAS_ATUAL !== null ? `
     <div class="kpi-card">
       <div class="kpi-label">Saldo Conta Asaas</div>
-      <div class="kpi-value" style="color:${SALDO_ASAAS_ATUAL>=0?'var(--blue)':'var(--red)'}">${fmtK(SALDO_ASAAS_ATUAL)}</div>
-      <div class="kpi-proj">Abertura Jan/2026: ${fmtK(SALDO_INICIAL_2026)}</div>
-      <div class="kpi-delta pos">Recebimentos Asaas · saldo atual</div>
-    </div>` : ''}
+      <div class="kpi-value" style="color:${SALDO_ASAAS_ATUAL!==null?(SALDO_ASAAS_ATUAL>=0?'var(--blue)':'var(--red)'):'var(--blue)'}">${SALDO_ASAAS_ATUAL!==null?fmtK(SALDO_ASAAS_ATUAL):fmtK(SALDO_INICIAL_2026)}</div>
+      <div class="kpi-proj">Abertura Jan/2026: <strong>${fmtK(SALDO_INICIAL_2026)}</strong> <a href="#" onclick="fluxoEditarAbertura();return false" style="font-size:11px;color:var(--blue);margin-left:3px" title="Editar saldo de abertura">✎</a></div>
+      <div class="kpi-delta pos">Recebimentos Asaas${SALDO_ASAAS_ATUAL===null?' · conf. manual':''}</div>
+    </div>
   `;
 
   const chartLabels = semanas.map(s => `S${s.n}`);

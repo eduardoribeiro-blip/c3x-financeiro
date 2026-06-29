@@ -1876,35 +1876,47 @@ function fluxoAgregarDados(semanas, cc) {
     return lista.map(c => c.costCenterDescription || c.description || c.name || '').filter(Boolean);
   };
 
-  // Créditos
+  // Créditos — mesma lógica de valor que carregarNibo()
   for (const item of RAW_CREDITS) {
-    const v = Math.abs(item.value || 0);
-    if (v <= 0) continue;
     if (ccFiltro && !ccDeItem(item).includes(ccFiltro)) continue;
 
-    const ccLabel = ccDeItem(item)[0] || 'Sem CC';
-    const stake   = item.stakeholder?.name || '—';
-    const desc    = item.description || '—';
+    const ccLabel    = ccDeItem(item)[0] || 'Sem CC';
+    const stake      = item.stakeholder?.name || '—';
+    const desc       = item.description || '—';
+    const isPaidTrue = item.isPaid === true || item.isEntry === true;
+    const vReal      = isPaidTrue
+      ? Math.abs(item.value || 0)
+      : Math.abs(item.value || 0) - Math.abs(item.openValue || 0); // parcialmente pago
+    const vPrev      = !isPaidTrue ? Math.abs(item.openValue || 0) : 0;
 
-    if (item.isPaid === true || item.isEntry === true) {
+    // Parte realizada
+    if (vReal > 0) {
       const dStr = _dataCaixa(item);
-      if (!dStr) continue;
-      const d = new Date(dStr);
-      if (d < inicio || d > fim) continue;
-      const s = findSem(d);
-      if (!s) continue;
-      s.entradas_real += v;
-      s.lancamentos.push({ tipo: 'entrada_real', data: d, desc, valor: v, stakeholder: stake, cc: ccLabel });
-    } else {
+      if (dStr) {
+        const d = new Date(dStr);
+        if (d >= inicio && d <= fim) {
+          const s = findSem(d);
+          if (s) {
+            s.entradas_real += vReal;
+            s.lancamentos.push({ tipo: 'entrada_real', data: d, desc, valor: vReal, stakeholder: stake, cc: ccLabel });
+          }
+        }
+      }
+    }
+
+    // Parte ainda a receber (só para não-pagos com saldo aberto)
+    if (vPrev > 0) {
       const dStr = item.dueDate || item.scheduleDate;
-      if (!dStr) continue;
-      const d = new Date(dStr);
-      if (d < inicio || d > fim) continue;
-      const s = findSem(d);
-      if (!s) continue;
-      const vPrev = Math.abs(item.openValue || 0) > 0 ? Math.abs(item.openValue) : v;
-      s.entradas_prev += vPrev;
-      s.lancamentos.push({ tipo: 'entrada_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
+      if (dStr) {
+        const d = new Date(dStr);
+        if (d >= inicio && d <= fim) {
+          const s = findSem(d);
+          if (s) {
+            s.entradas_prev += vPrev;
+            s.lancamentos.push({ tipo: 'entrada_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
+          }
+        }
+      }
     }
   }
 

@@ -817,6 +817,9 @@ const PROJ_CAT = {
 ═══════════════════════════════════════════ */
 let RAW_CREDITS = [];
 let RAW_DEBITS  = [];
+let RAW_ENTRIES = [];         // movimentos bancários reais (entries) — se disponível via API
+let SALDO_ASAAS_ATUAL = null; // saldo atual da conta Recebimentos Asaas (via accounts API)
+let SALDO_INICIAL_2026 = 0;   // saldo de abertura em 01/Jan/2026 (calculado)
 
 // Regime de caixa: data de recebimento. paymentDate tem prioridade; fallback para dueDate.
 function _dataCaixa(item) {
@@ -1050,6 +1053,63 @@ async function carregarNibo() {
     // Investimentos (Adiantamento de Lucros etc.) ficam só em REAL.categorias
   }
 
+
+  // ── Saldo e movimentos da conta Recebimentos Asaas ──────────────────────────
+  const _CONTA_ASAAS_ID = '70747a41-4ab5-4b65-96c9-0a76545f7c11';
+
+  loaderEl.textContent = 'Buscando saldo Recebimentos Asaas...';
+  SALDO_ASAAS_ATUAL = null;
+  try {
+    const accData = await niboGet('accounts');
+    const accs = accData.items || accData || [];
+    const asaas = Array.isArray(accs) ? accs.find(a => (a.accountId||a.id) === _CONTA_ASAAS_ID) : null;
+    if (asaas) {
+      SALDO_ASAAS_ATUAL = asaas.balance ?? asaas.currentBalance ?? asaas.currentValue ?? asaas.amount ?? null;
+      console.log('[Fluxo] Conta Recebimentos Asaas:', JSON.stringify(asaas));
+    } else {
+      console.warn('[Fluxo] Conta Recebimentos Asaas não encontrada em accounts. IDs:', Array.isArray(accs)?accs.map(a=>a.accountId||a.id):accs);
+    }
+  } catch(e) { console.warn('[Fluxo] accounts error:', e.message); }
+
+  // Tentar buscar entries bancários da conta Asaas
+  loaderEl.textContent = 'Buscando movimentos bancários...';
+  RAW_ENTRIES = [];
+  for (const ep of [
+    {'$filter':`year(date) eq 2026 and accountId eq '${_CONTA_ASAAS_ID}'`,'$orderby':'date'},
+    {'$filter':'year(date) eq 2026','$orderby':'date'},
+  ]) {
+    try {
+      const eData = await niboGetAll('entries', ep);
+      const eAll  = eData.items || [];
+      if (eAll.length > 0) {
+        RAW_ENTRIES = eAll.filter(e => !e.accountId || e.accountId === _CONTA_ASAAS_ID);
+        console.log('[Fluxo entries] OK! Total:', eAll.length, '| Asaas:', RAW_ENTRIES.length, '| sample:', JSON.stringify(eAll[0]));
+        break;
+      }
+      console.log('[Fluxo entries] 0 itens:', JSON.stringify(ep)); break;
+    } catch(e) { console.warn('[Fluxo entries] falhou:', JSON.stringify(ep), e.message); }
+  }
+
+  // Calcular saldo de abertura 01/Jan/2026: saldo_atual − net_realizados_2026
+  if (SALDO_ASAAS_ATUAL !== null) {
+    const _tD = s => { const dt=new Date(s); return new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()); };
+    let _net = 0;
+    for (const item of (creditData.items||[])) {
+      const ok = item.isPaid===true||item.isEntry===true; if (!ok) continue;
+      const v  = Math.abs(item.value||0); if (!v) continue;
+      const d  = _dataCaixa(item); if (!d) continue;
+      if (_tD(new Date(d)).getFullYear()===2026) _net += v;
+    }
+    for (const item of (debitData.items||[])) {
+      const ok = item.isPaid===true||(item.isPaid==null&&Math.abs(item.openValue||0)===0&&Math.abs(item.value||0)>0);
+      if (!ok) continue;
+      const d = item.isPaid===true?(item.paymentDate||item.dueDate||item.scheduleDate):(item.dueDate||item.scheduleDate);
+      if (!d) continue;
+      if (_tD(new Date(d)).getFullYear()===2026) _net -= Math.abs(item.value||0);
+    }
+    SALDO_INICIAL_2026 = SALDO_ASAAS_ATUAL - _net;
+    console.log('[Fluxo] Saldo atual:', SALDO_ASAAS_ATUAL.toFixed(2), '| Net 2026:', _net.toFixed(2), '| Abertura 01/Jan:', SALDO_INICIAL_2026.toFixed(2));
+  }
 
   // Resultado
   for (let i=0;i<12;i++) REAL.resultado[i] = REAL.receita[i] - REAL.despesa[i];
@@ -1930,8 +1990,8 @@ function fluxoAgregarDados(semanas, cc) {
     const stake   = item.stakeholder?.name || '—';
     const desc    = item.description || '—';
     const cat     = item.categories?.[0]?.categoryName || item.categoryName || '';
-    // Mesma regra do carregarNibo: investimentos/distribuições ficam fora do resultado operacional
-    if (window.ehInvestimento && window.ehInvestimento(cat)) continue;
+    // Fluxo de Caixa inclui TODOS os desembolsos (inclusive distribuições/investimentos)
+    // pois todos saem da conta bancária — diferente da Visão Executiva (operacional)
     const pago    = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && v > 0);
 
     if (pago) {
@@ -1958,7 +2018,32 @@ function fluxoAgregarDados(semanas, cc) {
 
   for (const s of semanas) s.lancamentos.sort((a, b) => a.data - b.data);
 
-  let acum = 0;
+  // Saldo acumulado: parte do saldo de abertura correto da conta Recebimentos Asaas
+  let acum = SALDO_INICIAL_2026; // 0 se API accounts não disponível
+  if (semanas.length > 0 && SALDO_INICIAL_2026 !== 0) {
+    // Se o período não começa em Jan 1, precisa avançar o saldo pelos movimentos anteriores ao período
+    const periodoInicio = semanas[0].start;
+    const jan1 = new Date(2026, 0, 1);
+    if (periodoInicio > jan1) {
+      const _tD = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      for (const item of RAW_CREDITS) {
+        const ok = item.isPaid===true||item.isEntry===true; if (!ok) continue;
+        const vr = Math.abs(item.value||0); if (!vr) continue;
+        const ds = _dataCaixa(item); if (!ds) continue;
+        const dt = _tD(new Date(ds));
+        if (dt.getFullYear()===2026 && dt >= jan1 && dt < periodoInicio) acum += vr;
+      }
+      for (const item of RAW_DEBITS) {
+        const ok = item.isPaid===true||(item.isPaid==null&&Math.abs(item.openValue||0)===0&&Math.abs(item.value||0)>0);
+        if (!ok) continue;
+        const ds = item.isPaid===true?(item.paymentDate||item.dueDate||item.scheduleDate):(item.dueDate||item.scheduleDate);
+        if (!ds) continue;
+        const dt = _tD(new Date(ds));
+        if (dt.getFullYear()===2026 && dt >= jan1 && dt < periodoInicio) acum -= Math.abs(item.value||0);
+      }
+    }
+  }
+
   for (const s of semanas) {
     acum += s.entradas_real - s.saidas_real;
     s.saldo_acum = acum;
@@ -2127,7 +2212,15 @@ function renderFluxo() {
       <div class="kpi-value">${semsPos}<span style="font-size:16px;color:var(--text2)"> / ${semanas.length}</span></div>
       <div class="kpi-proj">${semsNeg} semana(s) deficitária(s)</div>
       <div class="kpi-delta ${semsPos >= semsNeg?'pos':'neg'}">${semanas.length > 0 ? Math.round(semsPos/semanas.length*100) : 0}% positivas</div>
-    </div>`;
+    </div>
+    ${SALDO_ASAAS_ATUAL !== null ? `
+    <div class="kpi-card">
+      <div class="kpi-label">Saldo Conta Asaas</div>
+      <div class="kpi-value" style="color:${SALDO_ASAAS_ATUAL>=0?'var(--blue)':'var(--red)'}">${fmtK(SALDO_ASAAS_ATUAL)}</div>
+      <div class="kpi-proj">Abertura Jan/2026: ${fmtK(SALDO_INICIAL_2026)}</div>
+      <div class="kpi-delta pos">Recebimentos Asaas · saldo atual</div>
+    </div>` : ''}
+  `;
 
   const chartLabels = semanas.map(s => `S${s.n}`);
   const nSems = semanas.length;

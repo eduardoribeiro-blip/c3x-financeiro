@@ -821,11 +821,29 @@ let RAW_ENTRIES = [];         // movimentos bancários reais (entries) — se di
 let SALDO_ASAAS_ATUAL = null; // saldo atual da conta Recebimentos Asaas (via accounts API)
 let SALDO_INICIAL_2026 = 0;   // saldo de abertura em 01/Jan/2026 (calculado)
 
-// Regime de caixa: data de recebimento. paymentDate tem prioridade; fallback para dueDate.
+// Regime de caixa: data de recebimento real.
+// A API Nibo pública não retorna paymentDate para itens Asaas; usamos updateDate como proxy:
+//   Regra 1 — dueDate em ano anterior (2025) e updateDate em 2026: item pago em atraso.
+//   Regra 2 — dueDate e updateDate ambos em 2026, mas updateDate > 120 dias depois: pago muito tarde.
+// Sem essas regras: 9 itens com dueDate/2025 ficam excluídos de Jan/2026 (−R$7.453) e
+// itens com dueDate em jan mas pagos em maio entram errado no mês de vencimento (+R$6.667).
 function _dataCaixa(item) {
   if (item.isEntry === true) return item.dueDate || item.scheduleDate || '';
-  if (item.isPaid === true) return item.paymentDate || item.dueDate || item.scheduleDate || '';
-  return item.dueDate || item.scheduleDate || '';
+  if (item.isPaid !== true) return item.dueDate || item.scheduleDate || '';
+
+  if (item.paymentDate) return item.paymentDate;
+
+  const due = item.dueDate;
+  const upd = item.updateDate;
+  if (due && upd) {
+    const dueD = new Date(due), updD = new Date(upd);
+    const dueY = dueD.getFullYear(), updY = updD.getFullYear();
+    // Regra 1: vencimento em 2024/2025, pagamento registrado em 2026
+    if (dueY < 2026 && updY >= 2026) return upd;
+    // Regra 2: mesmo ano (2026) mas pago com >120 dias de atraso (TUS Universal: jan→mai = 123d)
+    if (dueY === 2026 && updY === 2026 && (updD - dueD) / 86400000 > 120) return upd;
+  }
+  return due || item.scheduleDate || '';
 }
 
 let REAL = {

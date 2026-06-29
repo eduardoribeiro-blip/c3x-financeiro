@@ -390,12 +390,24 @@ tr:hover td { background: #f9fafb; }
           <option value="11">Dezembro</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:8px;padding-left:12px;border-left:1px solid var(--border)">
+        <span class="period-label">Ano:</span>
+        <select class="month-select" id="topbar-ano" onchange="setAno(this.value)" style="padding:4px 10px;font-size:12px">
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+        </select>
+      </div>
     </div>
     <div class="topbar-right">
       <span class="topbar-updated" id="topbar-updated">—</span>
       <span id="countdown-badge" style="display:none;font-size:11px;color:var(--text2);background:#f3f4f6;padding:3px 9px;border-radius:20px;font-family:monospace">
         🔄 <span id="countdown-text">30:00</span>
       </span>
+      <button class="refresh-btn" onclick="abrirModalAsaas()" title="Configurar token Asaas" id="btn-asaas-config" style="gap:5px">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        Asaas
+      </button>
       <button class="refresh-btn" onclick="recarregarManual()">
         <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
         Atualizar
@@ -820,16 +832,16 @@ let RAW_DEBITS  = [];
 let RAW_ENTRIES = [];         // movimentos bancários reais (entries) — se disponível via API
 let SALDO_ASAAS_ATUAL = null; // saldo atual da conta Recebimentos Asaas (via accounts API)
 let SALDO_INICIAL_2026 = 0;   // saldo de abertura em 01/Jan/2026 (calculado)
+let ASAAS_MAP = {};           // scheduleId → paymentDate real (via Asaas API)
 
-// Regime de caixa: data de recebimento. paymentDate tem prioridade; fallback para dueDate.
-// NOTA: a API Nibo pública não retorna paymentDate para itens Asaas. Isso gera uma diferença
-// conhecida de -R$786,33 em Jan/2026 (resultado líquido de dois erros que se cancelam):
-//   +R$6.666,67 (TUS Universal: dueDate jan, pago em mai — incluído incorretamente em jan)
-//   −R$7.453,00 (9 itens: dueDate dez/2025, pagos em jan/2026 — excluídos por filtro ano≠2026)
-// Solução definitiva: integração Asaas API para obter paymentDate real (aguardando chave).
+// Regime de caixa: data de recebimento.
+// Prioridade: ASAAS_MAP[scheduleId] > paymentDate > dueDate > scheduleDate
 function _dataCaixa(item) {
   if (item.isEntry === true) return item.dueDate || item.scheduleDate || '';
-  if (item.isPaid === true) return item.paymentDate || item.dueDate || item.scheduleDate || '';
+  if (item.isPaid === true) {
+    const asaasDate = item.scheduleId ? ASAAS_MAP[item.scheduleId] : null;
+    return asaasDate || item.paymentDate || item.dueDate || item.scheduleDate || '';
+  }
   return item.dueDate || item.scheduleDate || '';
 }
 
@@ -848,7 +860,8 @@ let REAL = {
 
 // Período selecionado
 let PERIODO = 'ytd';
-let MES_FILTRO = -1; // -1 = sem filtro de mês específico
+let MES_FILTRO  = -1;   // -1 = sem filtro de mês específico
+let ANO_FILTRO  = 2026; // ano exibido — muda filtro API + processamento cliente
 let TOKEN = '';
 const charts = {};
 
@@ -967,11 +980,50 @@ async function carregarCategoriasNibo() {
   }
 }
 
+async function carregarAsaasMap(asaasToken) {
+  const LIMIT = 100;
+  let offset = 0;
+  let total = 0;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  while (true) {
+    const params = new URLSearchParams({
+      token: asaasToken,
+      endpoint: 'payments',
+      status: 'RECEIVED',
+      'paymentDate[ge]': '2025-10-01',
+      'paymentDate[le]': hoje,
+      limit: LIMIT,
+      offset,
+    });
+
+    const resp = await fetch(`/api/asaas?${params}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(`Asaas HTTP ${resp.status}: ${err.error || JSON.stringify(err).slice(0, 120)}`);
+    }
+    const data = await resp.json();
+
+    for (const p of (data.data || [])) {
+      if (p.externalReference && p.paymentDate) {
+        ASAAS_MAP[p.externalReference] = p.paymentDate;
+        total++;
+      }
+    }
+
+    if (!data.hasMore) break;
+    offset += LIMIT;
+    if (offset > 9900) break;
+  }
+
+  return total;
+}
+
 async function carregarNibo() {
   const loaderEl = document.getElementById('loader-label');
-  // Inclui dueDate 2024-2026: itens de anos anteriores podem ser pagos em 2026
-  // A filtragem por paymentDate=2026 é feita no cliente (regime de caixa)
-  const filtro = {'$orderby':'dueDate','$filter':'(year(dueDate) eq 2026 or year(dueDate) eq 2025 or year(dueDate) eq 2024)'};
+  // Inclui dueDate do ANO_FILTRO e 2 anos anteriores: itens com atraso ainda são capturados
+  // A filtragem por paymentDate=ANO_FILTRO é feita no cliente (regime de caixa)
+  const filtro = {'$orderby':'dueDate','$filter':`(year(dueDate) eq ${ANO_FILTRO} or year(dueDate) eq ${ANO_FILTRO-1} or year(dueDate) eq ${ANO_FILTRO-2})`};
 
   loaderEl.textContent = 'Buscando categorias...';
   await carregarCategoriasNibo();
@@ -986,8 +1038,23 @@ async function carregarNibo() {
   RAW_DEBITS = debitData.items || [];
   console.log('[Nibo] Total créditos:', creditData.items.length, '| pagos:', creditData.items.filter(i=>i.isPaid).length);
   console.log('[Nibo] Total débitos:', debitData.items.length, '| pagos:', debitData.items.filter(i=>i.isPaid).length);
-  loaderEl.textContent = 'Processando...';
 
+  // ── Integração Asaas: paymentDate real ──────────────────────────
+  ASAAS_MAP = {};
+  const _asaasToken = localStorage.getItem('c3x_asaas_token') || '';
+  if (_asaasToken) {
+    loaderEl.textContent = 'Buscando datas de pagamento Asaas...';
+    try {
+      const n = await carregarAsaasMap(_asaasToken);
+      console.log('[Asaas] ASAAS_MAP carregado:', n, 'pagamentos com externalReference');
+    } catch(e) {
+      console.warn('[Asaas] Falha ao carregar:', e.message);
+    }
+  } else {
+    console.log('[Asaas] Token não configurado — receita usará dueDate como fallback (diferença conhecida de R$786,33 em Jan/2026).');
+  }
+
+  loaderEl.textContent = 'Processando...';
 
   document.getElementById('loader-label').textContent = 'Processando centros de custo...';
   await carregarCentrosCusto(creditData, debitData);
@@ -1010,7 +1077,7 @@ async function carregarNibo() {
     const d = _dataCaixa(item);
     if (!d) continue;
     const dt = new Date(d);
-    if (dt.getFullYear() !== 2026) continue;
+    if (dt.getFullYear() !== ANO_FILTRO) continue;
     const m = dt.getMonth();
     REAL.receita[m] += v;
 
@@ -1041,7 +1108,7 @@ async function carregarNibo() {
       : (item.dueDate || item.scheduleDate);
     if (!d) continue;
     const dt = new Date(d);
-    if (dt.getFullYear()!==2026) continue;
+    if (dt.getFullYear()!==ANO_FILTRO) continue;
     const m = dt.getMonth();
     const v = Math.abs(item.value||0);
 
@@ -1080,8 +1147,8 @@ async function carregarNibo() {
   loaderEl.textContent = 'Buscando movimentos bancários...';
   RAW_ENTRIES = [];
   for (const ep of [
-    {'$filter':`year(date) eq 2026 and accountId eq '${_CONTA_ASAAS_ID}'`,'$orderby':'date'},
-    {'$filter':'year(date) eq 2026','$orderby':'date'},
+    {'$filter':`year(date) eq ${ANO_FILTRO} and accountId eq '${_CONTA_ASAAS_ID}'`,'$orderby':'date'},
+    {'$filter':`year(date) eq ${ANO_FILTRO}`,'$orderby':'date'},
   ]) {
     try {
       const eData = await niboGetAll('entries', ep);
@@ -1540,7 +1607,7 @@ function gerarResumoPeriodo(isGeral, cc, from, to) {
     <div class="diag-card-header">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="diag-mes-dot" style="background:${dotCor}"></div>
-        <span class="diag-mes-label">RESUMO DO PERÍODO — ${MESES[from]}–${MESES[to]} 2026</span>
+        <span class="diag-mes-label">RESUMO DO PERÍODO — ${MESES[from]}–${MESES[to]} ${ANO_FILTRO}</span>
       </div>
       ${diagSaudeBadge(sBadge)}
     </div>
@@ -1554,8 +1621,8 @@ function gerarResumoPeriodo(isGeral, cc, from, to) {
       </div>
       <p class="diag-para" style="margin-top:12px">
         ${atingTotal !== null
-          ? `Receita acumulada de <strong>${fmtFull(totalRec)}</strong> de <strong>${MESES_FULL[from]} a ${MESES_FULL[to]} de 2026</strong>, atingindo <strong>${atingTotal.toFixed(1)}%</strong> da meta de ${fmtFull(totalRecProj)}${atingTotal >= 100 ? ` — superando em ${fmtFull(totalRec - totalRecProj)}` : ` — lacuna de ${fmtFull(totalRecProj - totalRec)}`}.`
-          : `Receita acumulada de <strong>${fmtFull(totalRec)}</strong> de <strong>${MESES_FULL[from]} a ${MESES_FULL[to]} de 2026</strong>.`}
+          ? `Receita acumulada de <strong>${fmtFull(totalRec)}</strong> de <strong>${MESES_FULL[from]} a ${MESES_FULL[to]} de ${ANO_FILTRO}</strong>, atingindo <strong>${atingTotal.toFixed(1)}%</strong> da meta de ${fmtFull(totalRecProj)}${atingTotal >= 100 ? ` — superando em ${fmtFull(totalRec - totalRecProj)}` : ` — lacuna de ${fmtFull(totalRecProj - totalRec)}`}.`
+          : `Receita acumulada de <strong>${fmtFull(totalRec)}</strong> de <strong>${MESES_FULL[from]} a ${MESES_FULL[to]} de ${ANO_FILTRO}</strong>.`}
         Resultado operacional acumulado: <strong style="color:${totalRes >= 0 ? 'var(--green)' : 'var(--red)'}">${totalRes >= 0 ? 'superavitário' : 'deficitário'} em ${fmtFull(Math.abs(totalRes))}</strong>${margemMedia !== null ? `, margem média de <strong>${margemMedia.toFixed(1)}%</strong>` : ''}.
         ${tendHtml ? `Tendência de receita no período: ${tendHtml}.` : ''}
       </p>
@@ -1623,7 +1690,7 @@ function diagRenderConteudo() {
         <div class="diag-card-header">
           <div style="display:flex;align-items:center;gap:10px">
             <div class="diag-mes-dot" style="background:${dotCor}"></div>
-            <span class="diag-mes-label">${MESES_FULL[mes].toUpperCase()} 2026</span>
+            <span class="diag-mes-label">${MESES_FULL[mes].toUpperCase()} ${ANO_FILTRO}</span>
           </div>
           ${diagSaudeBadge(saude)}
         </div>
@@ -1877,8 +1944,8 @@ let FLUXO_DRILL = null;
 
 function fluxoGerarSemanas(from, to) {
   const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-  const inicio = new Date(2026, from, 1);
-  const fim    = new Date(2026, to + 1, 0);
+  const inicio = new Date(ANO_FILTRO, from, 1);
+  const fim    = new Date(ANO_FILTRO, to + 1, 0);
 
   // Encontrar segunda-feira da semana que contém `inicio`
   const primSeg = new Date(inicio);
@@ -1916,8 +1983,8 @@ function fluxoAgregarDados(semanas, cc) {
   // Comparações apenas por data (sem hora) — datas da API vêm como UTC midnight
   // e em UTC-3 viram véspera às 21h, criando brechas entre semanas se não normalizado
   const toDay  = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const inicio = new Date(2026, from, 1);           // local midnight — já é só-data
-  const fim    = new Date(2026, to + 1, 0);         // último dia do mês — local midnight
+  const inicio = new Date(ANO_FILTRO, from, 1);     // local midnight — já é só-data
+  const fim    = new Date(ANO_FILTRO, to + 1, 0);   // último dia do mês — local midnight
 
   const ccFiltro = cc !== 'geral' ? cc : null;
 
@@ -2016,7 +2083,7 @@ function fluxoAgregarDados(semanas, cc) {
   if (semanas.length > 0 && SALDO_INICIAL_2026 !== 0) {
     // Se o período não começa em Jan 1, precisa avançar o saldo pelos movimentos anteriores ao período
     const periodoInicio = semanas[0].start;
-    const jan1 = new Date(2026, 0, 1);
+    const jan1 = new Date(ANO_FILTRO, 0, 1);
     if (periodoInicio > jan1) {
       const _tD = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
       for (const item of RAW_CREDITS) {
@@ -2024,7 +2091,7 @@ function fluxoAgregarDados(semanas, cc) {
         const vr = Math.abs(item.value||0); if (!vr) continue;
         const ds = _dataCaixa(item); if (!ds) continue;
         const dt = _tD(new Date(ds));
-        if (dt.getFullYear()===2026 && dt >= jan1 && dt < periodoInicio) acum += vr;
+        if (dt.getFullYear()===ANO_FILTRO && dt >= jan1 && dt < periodoInicio) acum += vr;
       }
       for (const item of RAW_DEBITS) {
         const ok = item.isPaid===true||(item.isPaid==null&&Math.abs(item.openValue||0)===0&&Math.abs(item.value||0)>0);
@@ -2032,7 +2099,7 @@ function fluxoAgregarDados(semanas, cc) {
         const ds = item.isPaid===true?(item.paymentDate||item.dueDate||item.scheduleDate):(item.dueDate||item.scheduleDate);
         if (!ds) continue;
         const dt = _tD(new Date(ds));
-        if (dt.getFullYear()===2026 && dt >= jan1 && dt < periodoInicio) acum -= Math.abs(item.value||0);
+        if (dt.getFullYear()===ANO_FILTRO && dt >= jan1 && dt < periodoInicio) acum -= Math.abs(item.value||0);
       }
     }
   }
@@ -2637,7 +2704,7 @@ async function carregarCentrosCusto(creditData, debitData) {
     const ccs = item.costCenters || [];
     if (ccs.length === 0) continue;
     const payDate = new Date(item.paymentDate || item.dueDate);
-    if (payDate.getFullYear() !== 2026) continue;
+    if (payDate.getFullYear() !== ANO_FILTRO) continue;
     const mes = payDate.getMonth();
     const v = Math.abs(item.value||0);
     for (const cc of ccs) {
@@ -2672,7 +2739,7 @@ async function carregarCentrosCusto(creditData, debitData) {
       if (item.isPaid === true || item.isEntry === true) {
         const dataReal = _dataCaixa(item);
         const payDate  = dataReal ? new Date(dataReal) : null;
-        if (payDate && payDate.getFullYear() === 2026) {
+        if (payDate && payDate.getFullYear() === ANO_FILTRO) {
           const mesPago = payDate.getMonth();
           if (!CC_RECEITA[nome]) CC_RECEITA[nome] = Array(12).fill(0);
           CC_RECEITA[nome][mesPago] += v;
@@ -2680,7 +2747,7 @@ async function carregarCentrosCusto(creditData, debitData) {
       }
 
       // CC_INADIM: mensalização em 2026 (para KPIs de serviço)
-      if (!item.isPaid && dueDate && dueDate < hoje && openV > 0 && dueDate.getFullYear() === 2026) {
+      if (!item.isPaid && dueDate && dueDate < hoje && openV > 0 && dueDate.getFullYear() === ANO_FILTRO) {
         if (!CC_INADIM[nome]) CC_INADIM[nome] = { total: 0, porMes: Array(12).fill(0) };
         CC_INADIM[nome].total += openV;
         CC_INADIM[nome].porMes[dueDate.getMonth()] += openV;
@@ -3084,11 +3151,22 @@ function setPeriod(p, el) {
 
 function setMes(val) {
   MES_FILTRO = parseInt(val);
-  // Desativar chips de período quando mês específico selecionado
   if (MES_FILTRO >= 0) {
     document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
   }
   renderTudo();
+}
+
+function setAno(val) {
+  ANO_FILTRO = parseInt(val);
+  // Reset período para YTD ao trocar o ano, a menos que seja o ano atual (mantém YTD real)
+  const anoAtual = new Date().getFullYear();
+  if (ANO_FILTRO !== anoAtual) {
+    PERIODO = 'ano';
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    document.querySelector('.chip[onclick*="\'ano\'"]')?.classList.add('active');
+  }
+  recarregarManual();
 }
 
 /* ═══════════════════════════════════════════
@@ -3706,7 +3784,7 @@ function exportarJaneiro() {
     else if (!dateUsed) excl = 'sem data';
     else {
       const dt = new Date(dateUsed);
-      if (dt.getFullYear() !== 2026) excl = `ano=${dt.getFullYear()}`;
+      if (dt.getFullYear() !== ANO_FILTRO) excl = `ano=${dt.getFullYear()}`;
       else if (dt.getMonth() !== 0)  excl = `mes=${dt.getMonth()+1} (nao jan)`;
     }
 
@@ -3754,7 +3832,90 @@ function exportarJaneiro() {
 window.addEventListener('DOMContentLoaded', ()=>{
   const saved = localStorage.getItem('nibo_token_c3x');
   if (saved) { TOKEN=saved; document.getElementById('token-input').value=saved; iniciar(); }
+  atualizarBadgeAsaas();
+  document.getElementById('topbar-ano').value = String(ANO_FILTRO);
 });
+
+function abrirModalAsaas() {
+  const atual = localStorage.getItem('c3x_asaas_token') || '';
+  document.getElementById('asaas-token-input').value = atual;
+  document.getElementById('asaas-modal').style.display = 'flex';
+  document.getElementById('asaas-status').textContent = '';
+}
+
+function fecharModalAsaas() {
+  document.getElementById('asaas-modal').style.display = 'none';
+}
+
+async function salvarTokenAsaas() {
+  const t = document.getElementById('asaas-token-input').value.trim();
+  const statusEl = document.getElementById('asaas-status');
+
+  if (!t) {
+    localStorage.removeItem('c3x_asaas_token');
+    statusEl.style.color = 'var(--text2)';
+    statusEl.textContent = 'Token removido.';
+    atualizarBadgeAsaas();
+    return;
+  }
+
+  statusEl.style.color = 'var(--text2)';
+  statusEl.textContent = 'Verificando...';
+
+  try {
+    const params = new URLSearchParams({ token: t, endpoint: 'payments', status: 'RECEIVED', limit: 1, offset: 0 });
+    const resp = await fetch(`/api/asaas?${params}`);
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = `Erro: ${data.error || 'Token inválido (HTTP ' + resp.status + ')'}`;
+      return;
+    }
+
+    localStorage.setItem('c3x_asaas_token', t);
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `Token válido. ${data.totalCount ?? ''} pagamentos recebidos disponíveis.`;
+    atualizarBadgeAsaas();
+
+    setTimeout(() => {
+      fecharModalAsaas();
+      recarregarManual();
+    }, 1500);
+  } catch(e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Erro de conexão: ' + e.message;
+  }
+}
+
+function atualizarBadgeAsaas() {
+  const btn = document.getElementById('btn-asaas-config');
+  if (!btn) return;
+  const temToken = !!localStorage.getItem('c3x_asaas_token');
+  btn.style.borderColor = temToken ? 'var(--green)' : '';
+  btn.style.color = temToken ? 'var(--green)' : '';
+  btn.title = temToken ? 'Asaas conectado — clique para reconfigurar' : 'Configurar token Asaas para corrigir datas de pagamento';
+}
 </script>
+
+<!-- Modal Asaas -->
+<div id="asaas-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:12px;padding:32px;width:min(480px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 6px;font-size:18px;font-weight:700">Integração Asaas</h3>
+    <p style="margin:0 0 20px;font-size:13px;color:var(--text2)">
+      O token Asaas permite buscar as datas reais de recebimento e corrigir divergências de regime de caixa.
+      Peça ao administrador da conta Asaas para gerar uma chave em <strong>Configurações → Integrações → Gerar nova chave</strong>.
+    </p>
+    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Token Asaas (access_token)</label>
+    <input id="asaas-token-input" type="password" placeholder="$aact_..." autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;margin-bottom:12px">
+    <p id="asaas-status" style="font-size:12px;min-height:18px;margin:0 0 16px"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="refresh-btn" onclick="fecharModalAsaas()" style="padding:8px 18px">Cancelar</button>
+      <button onclick="salvarTokenAsaas()" style="padding:8px 22px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Salvar e testar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -246,6 +246,20 @@ tr:hover td { background: #f9fafb; }
   .charts-grid { grid-template-columns: 1fr; }
   .service-grid { grid-template-columns: 1fr; }
 }
+
+/* FLUXO DE CAIXA */
+.fluxo-tabs .diag-aba-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+.fluxo-week-row { cursor: pointer; transition: background 0.12s; }
+.fluxo-week-row:hover td { background: #eff6ff; }
+.fluxo-week-row.expanded td { background: #eff6ff; }
+.fluxo-drill-row { background: #f8faff; }
+.fluxo-drill-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
+.fluxo-drill-inner { padding: 6px 16px 16px 40px; }
+.fluxo-drill-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.fluxo-drill-table td { padding: 5px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+.fluxo-drill-table tr:last-child td { border-bottom: none; }
+.fluxo-drill-table thead td { font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; padding-bottom: 6px; }
+.fluxo-tfoot td { background: var(--text); color: white; font-weight: 700; font-size: 13px; padding: 12px 16px; }
 </style>
 </head>
 <body>
@@ -308,6 +322,10 @@ tr:hover td { background: #f9fafb; }
     <a href="#" onclick="goPage('diagnostico',this)">
       <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
       Insights
+    </a>
+    <a href="#" onclick="goPage('fluxo',this)">
+      <svg viewBox="0 0 24 24"><path d="M3 18h6v-2H3v2zm0-5h12v-2H3v2zm0-7v2h18V6H3zm16 9.34c.87-.45 1.5-1.32 1.5-2.34C20.5 11.01 19.49 10 18.25 10H17V7l-3 3 3 3v-3h1.25c.55 0 1 .45 1 1s-.45 1-1 1H14v2h3.25c1.24 0 2.25-1.01 2.25-2.25 0-.91-.52-1.7-1.25-2.15V15.34z"/></svg>
+      Fluxo de Caixa
     </a>
   </div>
   <div class="sidebar-section">Serviços</div>
@@ -694,6 +712,38 @@ tr:hover td { background: #f9fafb; }
     </div>
   </div>
 
+  <!-- PAGE: FLUXO DE CAIXA -->
+  <div class="page" id="page-fluxo">
+    <div class="page-header">
+      <div class="page-badge" style="background:#eff6ff;color:#1d4ed8">Operacional</div>
+      <h1 class="page-title">Fluxo de Caixa</h1>
+      <p class="page-sub">Movimentações semanais — realizadas (regime de caixa) e previstas (vencimento futuro).</p>
+    </div>
+    <div class="diag-tabs fluxo-tabs" id="fluxo-tabs"></div>
+    <div class="kpi-grid" id="fluxo-kpis" style="margin-bottom:1.5rem"></div>
+    <div class="chart-card" style="margin-bottom:1.5rem">
+      <div class="chart-title">Entradas e Saídas por Semana</div>
+      <div class="chart-sub" id="fluxo-chart-sub" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
+      <div class="chart-legend" style="margin-bottom:12px">
+        <span class="leg"><span class="leg-dot" style="background:#10b981"></span>Entradas Realizadas</span>
+        <span class="leg"><span class="leg-dot" style="background:rgba(16,185,129,0.3)"></span>Entradas Previstas</span>
+        <span class="leg"><span class="leg-dot" style="background:#ef4444"></span>Saídas Realizadas</span>
+        <span class="leg"><span class="leg-dot" style="background:rgba(239,68,68,0.3)"></span>Saídas Previstas</span>
+        <span class="leg"><span class="leg-dot" style="background:#3b82f6;border-radius:50%"></span>Saldo Acumulado</span>
+      </div>
+      <div style="height:280px"><canvas id="chartFluxo"></canvas></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        <div>
+          <div class="table-title">Detalhe por Semana</div>
+          <div class="table-sub" id="fluxo-table-sub">—</div>
+        </div>
+      </div>
+      <div id="fluxo-table-body" style="overflow-x:auto"></div>
+    </div>
+  </div>
+
   <!-- PAGE: SERVIÇOS (dinâmico por CC) -->
   <div class="page" id="page-servicos-cc">
     <div class="page-header">
@@ -766,6 +816,7 @@ const PROJ_CAT = {
    DADOS REALIZADOS (do Nibo via API)
 ═══════════════════════════════════════════ */
 let RAW_CREDITS = [];
+let RAW_DEBITS  = [];
 
 // Regime de caixa: data de recebimento. paymentDate tem prioridade; fallback para dueDate.
 function _dataCaixa(item) {
@@ -924,6 +975,7 @@ async function carregarNibo() {
   loaderEl.textContent = 'Buscando despesas...';
   const debitData = await niboGetAll('schedules/debit', filtro);
 
+  RAW_DEBITS = debitData.items || [];
   console.log('[Nibo] Total créditos:', creditData.items.length, '| pagos:', creditData.items.filter(i=>i.isPaid).length);
   console.log('[Nibo] Total débitos:', debitData.items.length, '| pagos:', debitData.items.filter(i=>i.isPaid).length);
   loaderEl.textContent = 'Processando...';
@@ -1764,6 +1816,344 @@ function renderInadim() {
   inadimRenderTabela();
 }
 
+/* ═══════════════════════════════════════════
+   FLUXO DE CAIXA — SEMANAL
+═══════════════════════════════════════════ */
+let FLUXO_ABA   = 'geral';
+let FLUXO_DRILL = null;
+
+function fluxoGerarSemanas(from, to) {
+  const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+  const inicio = new Date(2026, from, 1);
+  const fim    = new Date(2026, to + 1, 0);
+
+  // Encontrar segunda-feira da semana que contém `inicio`
+  const primSeg = new Date(inicio);
+  const dow = primSeg.getDay();
+  primSeg.setDate(primSeg.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const semanas = [];
+  let n = 1;
+  let cur = new Date(primSeg);
+
+  while (cur <= fim) {
+    const start = new Date(cur);
+    const end   = new Date(cur); end.setDate(end.getDate() + 6);
+    if (end >= inicio) {
+      const vStart = start < inicio ? new Date(inicio) : new Date(start);
+      const vEnd   = end   > fim    ? new Date(fim)    : new Date(end);
+      semanas.push({
+        key: `w${n}-${vStart.getMonth()}-${vStart.getDate()}`,
+        n, start, end, vStart, vEnd,
+        label: `S${n} · ${fmt(vStart)}–${fmt(vEnd)}`,
+        entradas_real: 0, entradas_prev: 0,
+        saidas_real: 0,   saidas_prev: 0,
+        saldo_acum: 0,
+        lancamentos: []
+      });
+      n++;
+    }
+    cur.setDate(cur.getDate() + 7);
+  }
+  return semanas;
+}
+
+function fluxoAgregarDados(semanas, cc) {
+  const [from, to] = periodoMeses();
+  const inicio = new Date(2026, from, 1);
+  const fim    = new Date(2026, to + 1, 0);
+  fim.setHours(23, 59, 59);
+
+  const ccFiltro = cc !== 'geral' ? cc : null;
+
+  const findSem = d => {
+    for (const s of semanas) if (d >= s.start && d <= s.end) return s;
+    return null;
+  };
+
+  const ccDeItem = item => {
+    const lista = item.costCenters || [];
+    return lista.map(c => c.costCenterDescription || c.description || c.name || '').filter(Boolean);
+  };
+
+  // Créditos
+  for (const item of RAW_CREDITS) {
+    const v = Math.abs(item.value || 0);
+    if (v <= 0) continue;
+    if (ccFiltro && !ccDeItem(item).includes(ccFiltro)) continue;
+
+    const ccLabel = ccDeItem(item)[0] || 'Sem CC';
+    const stake   = item.stakeholder?.name || '—';
+    const desc    = item.description || '—';
+
+    if (item.isPaid === true || item.isEntry === true) {
+      const dStr = _dataCaixa(item);
+      if (!dStr) continue;
+      const d = new Date(dStr);
+      if (d < inicio || d > fim) continue;
+      const s = findSem(d);
+      if (!s) continue;
+      s.entradas_real += v;
+      s.lancamentos.push({ tipo: 'entrada_real', data: d, desc, valor: v, stakeholder: stake, cc: ccLabel });
+    } else {
+      const dStr = item.dueDate || item.scheduleDate;
+      if (!dStr) continue;
+      const d = new Date(dStr);
+      if (d < inicio || d > fim) continue;
+      const s = findSem(d);
+      if (!s) continue;
+      const vPrev = Math.abs(item.openValue || 0) > 0 ? Math.abs(item.openValue) : v;
+      s.entradas_prev += vPrev;
+      s.lancamentos.push({ tipo: 'entrada_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
+    }
+  }
+
+  // Débitos
+  for (const item of RAW_DEBITS) {
+    const v = Math.abs(item.value || 0);
+    if (v <= 0) continue;
+    if (ccFiltro && !ccDeItem(item).includes(ccFiltro)) continue;
+
+    const ccLabel = ccDeItem(item)[0] || 'Sem CC';
+    const stake   = item.stakeholder?.name || '—';
+    const desc    = item.description || '—';
+    const pago    = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && v > 0);
+
+    if (pago) {
+      const dStr = item.isPaid === true
+        ? (item.paymentDate || item.dueDate || item.scheduleDate)
+        : (item.dueDate || item.scheduleDate);
+      if (!dStr) continue;
+      const d = new Date(dStr);
+      if (d < inicio || d > fim) continue;
+      const s = findSem(d);
+      if (!s) continue;
+      s.saidas_real += v;
+      s.lancamentos.push({ tipo: 'saida_real', data: d, desc, valor: v, stakeholder: stake, cc: ccLabel });
+    } else {
+      const dStr = item.dueDate || item.scheduleDate;
+      if (!dStr) continue;
+      const d = new Date(dStr);
+      if (d < inicio || d > fim) continue;
+      const s = findSem(d);
+      if (!s) continue;
+      const vPrev = Math.abs(item.openValue || 0) > 0 ? Math.abs(item.openValue) : v;
+      s.saidas_prev += vPrev;
+      s.lancamentos.push({ tipo: 'saida_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
+    }
+  }
+
+  for (const s of semanas) s.lancamentos.sort((a, b) => a.data - b.data);
+
+  let acum = 0;
+  for (const s of semanas) {
+    acum += s.entradas_real - s.saidas_real;
+    s.saldo_acum = acum;
+  }
+  return semanas;
+}
+
+function fluxoRenderTabela(semanas) {
+  const hoje = new Date();
+  let html = `<table style="width:100%;border-collapse:collapse;min-width:760px">
+    <thead><tr>
+      <th style="text-align:left;font-size:11px;font-weight:600;color:var(--text2);padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Semana</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:#059669;padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Entradas Real.</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:#6b7280;padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Entradas Prev.</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:#dc2626;padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Saídas Real.</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:#6b7280;padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Saídas Prev.</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:var(--text2);padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Saldo Semana</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:var(--blue);padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap">Saldo Acum.</th>
+      <th style="text-align:right;font-size:11px;font-weight:600;color:var(--text2);padding:10px 16px;border-bottom:1px solid var(--border);background:#f9fafb;white-space:nowrap"></th>
+    </tr></thead>
+    <tbody>`;
+
+  for (const s of semanas) {
+    const saldo     = s.entradas_real - s.saidas_real;
+    const isExp     = FLUXO_DRILL === s.key;
+    const isFuture  = s.start > hoje;
+    const isPast    = s.end < hoje;
+
+    const statusTag = isFuture
+      ? `<span class="badge badge-gray" style="margin-left:6px">Prevista</span>`
+      : !isPast
+        ? `<span class="badge badge-amber" style="margin-left:6px">Em curso</span>`
+        : saldo >= 0
+          ? `<span class="badge badge-green" style="margin-left:6px">+${fmtK(saldo)}</span>`
+          : `<span class="badge badge-red" style="margin-left:6px">${fmtK(saldo)}</span>`;
+
+    html += `<tr class="fluxo-week-row${isExp?' expanded':''}" onclick="fluxoToggleDrill('${s.key}')">
+      <td style="padding:12px 16px;border-bottom:1px solid var(--border)"><strong>${s.label.split(' · ')[0]}</strong> <span style="color:var(--text2);font-weight:400;font-size:12px">${s.label.split(' · ')[1]}</span>${statusTag}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--green);font-weight:500">${s.entradas_real > 0 ? fmtK(s.entradas_real) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);color:#6b7280;font-style:italic">${s.entradas_prev > 0 ? fmtK(s.entradas_prev) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--red);font-weight:500">${s.saidas_real > 0 ? fmtK(s.saidas_real) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);color:#6b7280;font-style:italic">${s.saidas_prev > 0 ? fmtK(s.saidas_prev) : '<span style="color:#d1d5db">—</span>'}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;color:${saldo>=0?'var(--green)':'var(--red)'}">${fmtK(saldo)}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);font-weight:700;color:${s.saldo_acum>=0?'var(--blue)':'var(--red)'}">${fmtK(s.saldo_acum)}</td>
+      <td style="text-align:right;padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text2);font-size:11px;white-space:nowrap">${isExp?'▲':'▼'} ${s.lancamentos.length} lanç.</td>
+    </tr>`;
+
+    if (isExp) {
+      const linhas = s.lancamentos.map(l => {
+        const isEntrada = l.tipo.startsWith('entrada');
+        const isReal    = l.tipo.endsWith('_real');
+        const cor = isEntrada ? (isReal ? 'var(--green)' : '#6b7280') : (isReal ? 'var(--red)' : '#6b7280');
+        const sinal = isEntrada ? '+' : '-';
+        const tipoBadge = isEntrada
+          ? (isReal ? '<span class="badge badge-green">Entrada</span>' : '<span class="badge" style="background:#f0fdf4;color:#6b7280;border:1px solid #bbf7d0">Previsto ↑</span>')
+          : (isReal ? '<span class="badge badge-red">Saída</span>'     : '<span class="badge" style="background:#fff1f2;color:#6b7280;border:1px solid #fecaca">Previsto ↓</span>');
+        return `<tr>
+          <td style="white-space:nowrap;color:var(--text2)">${l.data.toLocaleDateString('pt-BR')}</td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.desc}">${l.desc}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)" title="${l.stakeholder}">${l.stakeholder}</td>
+          <td><span style="font-size:10px;background:#f3f4f6;padding:1px 7px;border-radius:8px;color:var(--text2)">${l.cc}</span></td>
+          <td style="text-align:right;font-weight:600;color:${cor};white-space:nowrap">${sinal}${fmtFull(l.valor)}</td>
+          <td>${tipoBadge}</td>
+        </tr>`;
+      }).join('');
+
+      html += `<tr class="fluxo-drill-row"><td colspan="8">
+        <div class="fluxo-drill-inner">
+          <table class="fluxo-drill-table">
+            <thead><tr>
+              <td>Data</td><td>Descrição</td><td>Cliente/Fornecedor</td><td>CC</td>
+              <td style="text-align:right">Valor</td><td>Tipo</td>
+            </tr></thead>
+            <tbody>${linhas || '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:1rem">Nenhum lançamento nesta semana.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </td></tr>`;
+    }
+  }
+
+  const totEntR = semanas.reduce((s, w) => s + w.entradas_real, 0);
+  const totEntP = semanas.reduce((s, w) => s + w.entradas_prev, 0);
+  const totSaiR = semanas.reduce((s, w) => s + w.saidas_real, 0);
+  const totSaiP = semanas.reduce((s, w) => s + w.saidas_prev, 0);
+  const totSaldoR = totEntR - totSaiR;
+  const saldoFinal = semanas.length ? semanas[semanas.length - 1].saldo_acum : 0;
+
+  html += `</tbody>
+    <tfoot><tr class="fluxo-tfoot">
+      <td>TOTAL — ${semanas.length} semanas</td>
+      <td style="text-align:right;color:#a7f3d0">${fmtK(totEntR)}</td>
+      <td style="text-align:right;color:#a7f3d0;opacity:.7">${fmtK(totEntP)}</td>
+      <td style="text-align:right;color:#fca5a5">${fmtK(totSaiR)}</td>
+      <td style="text-align:right;color:#fca5a5;opacity:.7">${fmtK(totSaiP)}</td>
+      <td style="text-align:right;color:${totSaldoR>=0?'#a7f3d0':'#fca5a5'}">${fmtK(totSaldoR)}</td>
+      <td style="text-align:right;color:${saldoFinal>=0?'#93c5fd':'#fca5a5'}">${fmtK(saldoFinal)}</td>
+      <td></td>
+    </tr></tfoot>
+  </table>`;
+
+  document.getElementById('fluxo-table-body').innerHTML = html;
+  document.getElementById('fluxo-table-sub').textContent = `${semanas.length} semanas no período`;
+}
+
+function fluxoToggleDrill(key) {
+  FLUXO_DRILL = FLUXO_DRILL === key ? null : key;
+  const [from, to] = periodoMeses();
+  fluxoRenderTabela(fluxoAgregarDados(fluxoGerarSemanas(from, to), FLUXO_ABA));
+}
+
+function fluxoSetAba(aba, el) {
+  FLUXO_ABA   = aba;
+  FLUXO_DRILL = null;
+  document.querySelectorAll('#fluxo-tabs .diag-aba-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderFluxo();
+}
+
+function renderFluxo() {
+  const ccs = [...new Set([
+    ...Object.keys(CC_RECEITA || {}),
+    ...Object.keys(CC_DATA    || {})
+  ])].filter(cc =>
+    (CC_RECEITA[cc] && CC_RECEITA[cc].some(v => v > 0)) ||
+    (CC_DATA[cc]    && CC_DATA[cc].desp.some(v => v > 0))
+  ).sort();
+
+  document.getElementById('fluxo-tabs').innerHTML =
+    `<button class="diag-aba-btn${FLUXO_ABA==='geral'?' active':''}" onclick="fluxoSetAba('geral',this)">Geral</button>` +
+    ccs.map(cc =>
+      `<button class="diag-aba-btn${FLUXO_ABA===cc?' active':''}" onclick="fluxoSetAba('${cc.replace(/'/g,"\\'")}',this)">${cc}</button>`
+    ).join('');
+
+  const [from, to] = periodoMeses();
+  const semanas = fluxoAgregarDados(fluxoGerarSemanas(from, to), FLUXO_ABA);
+
+  const totEntR  = semanas.reduce((s, w) => s + w.entradas_real, 0);
+  const totEntP  = semanas.reduce((s, w) => s + w.entradas_prev, 0);
+  const totSaiR  = semanas.reduce((s, w) => s + w.saidas_real,  0);
+  const totSaiP  = semanas.reduce((s, w) => s + w.saidas_prev,  0);
+  const saldoR   = totEntR - totSaiR;
+  const semsPos  = semanas.filter(s => (s.entradas_real - s.saidas_real) > 0).length;
+  const semsNeg  = semanas.filter(s => (s.entradas_real - s.saidas_real) < 0 && (s.entradas_real + s.saidas_real) > 0).length;
+
+  document.getElementById('fluxo-kpis').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Entradas Realizadas</div>
+      <div class="kpi-value" style="color:var(--green)">${fmtK(totEntR)}</div>
+      <div class="kpi-proj">Previsto adicional: ${fmtK(totEntP)}</div>
+      <div class="kpi-delta pos">Total c/ previstos: ${fmtK(totEntR + totEntP)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Saídas Realizadas</div>
+      <div class="kpi-value" style="color:var(--red)">${fmtK(totSaiR)}</div>
+      <div class="kpi-proj">Previsto adicional: ${fmtK(totSaiP)}</div>
+      <div class="kpi-delta neg">Total c/ previstos: ${fmtK(totSaiR + totSaiP)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Saldo Realizado</div>
+      <div class="kpi-value" style="color:${saldoR>=0?'var(--green)':'var(--red)'}">${fmtK(saldoR)}</div>
+      <div class="kpi-proj">Projetado c/ previstos: ${fmtK(saldoR + totEntP - totSaiP)}</div>
+      <div class="kpi-delta ${saldoR>=0?'pos':'neg'}">${saldoR>=0?'Superávit no período':'Déficit no período'}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Semanas Positivas</div>
+      <div class="kpi-value">${semsPos}<span style="font-size:16px;color:var(--text2)"> / ${semanas.length}</span></div>
+      <div class="kpi-proj">${semsNeg} semana(s) deficitária(s)</div>
+      <div class="kpi-delta ${semsPos >= semsNeg?'pos':'neg'}">${semanas.length > 0 ? Math.round(semsPos/semanas.length*100) : 0}% positivas</div>
+    </div>`;
+
+  const chartLabels = semanas.map(s => `S${s.n}`);
+  const nSems = semanas.length;
+  document.getElementById('fluxo-chart-sub').textContent = nSems > 0
+    ? `${nSems} semanas · ${semanas[0].label.split(' · ')[1]} a ${semanas[nSems-1].label.split(' · ')[1]}`
+    : '—';
+
+  mkChart('chartFluxo', {
+    type: 'bar',
+    data: {
+      labels: chartLabels,
+      datasets: [
+        { label:'Entradas Realizadas', data: semanas.map(s=>s.entradas_real), backgroundColor:'#10b981', borderRadius:3, stack:'in', order:1 },
+        { label:'Entradas Previstas',  data: semanas.map(s=>s.entradas_prev), backgroundColor:'rgba(16,185,129,0.28)', borderRadius:3, stack:'in', order:1 },
+        { label:'Saídas Realizadas',   data: semanas.map(s=>s.saidas_real),   backgroundColor:'#ef4444', borderRadius:3, stack:'out', order:1 },
+        { label:'Saídas Previstas',    data: semanas.map(s=>s.saidas_prev),   backgroundColor:'rgba(239,68,68,0.28)', borderRadius:3, stack:'out', order:1 },
+        { label:'Saldo Acumulado', data: semanas.map(s=>s.saldo_acum),
+          type:'line', borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.07)',
+          borderWidth:2, pointRadius:3, pointBackgroundColor:'#3b82f6', tension:0.35,
+          fill:true, yAxisID:'ySaldo', order:0 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtFull(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked:true, grid:{color:'rgba(0,0,0,0.05)'}, ticks:{color:'#9ca3af',font:{size:10}} },
+        y: { stacked:true, grid:{color:'rgba(0,0,0,0.05)'}, ticks:{color:'#9ca3af',font:{size:10}, callback:v=>'R$'+Math.round(v/1000)+'k'}, title:{display:true,text:'Entradas / Saídas',font:{size:10},color:'#9ca3af'} },
+        ySaldo: { type:'linear', position:'right', grid:{display:false}, ticks:{color:'#3b82f6',font:{size:10}, callback:v=>'R$'+Math.round(v/1000)+'k'}, title:{display:true,text:'Saldo Acum.',font:{size:10},color:'#3b82f6'} }
+      }
+    }
+  });
+
+  fluxoRenderTabela(semanas);
+}
+
 function renderTudo() {
   // Salvar estado atual do orçamento antes de re-renderizar (evita perda ao trocar período/mês)
   if (ORC_ABA === '__geral__') salvarOrcGeral(true); else salvarOrcamento(true);
@@ -1776,6 +2166,7 @@ function renderTudo() {
   renderOrcamento();
   renderInadim();
   renderDiagnostico();
+  renderFluxo();
   // Re-renderizar página de serviço se estiver aberta
   const paginaAtiva = document.querySelector('.page.active');
   if (paginaAtiva && paginaAtiva.id === 'page-servicos-cc' && CC_ATUAL) {

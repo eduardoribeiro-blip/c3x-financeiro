@@ -1860,14 +1860,18 @@ function fluxoGerarSemanas(from, to) {
 
 function fluxoAgregarDados(semanas, cc) {
   const [from, to] = periodoMeses();
-  const inicio = new Date(2026, from, 1);
-  const fim    = new Date(2026, to + 1, 0);
-  fim.setHours(23, 59, 59);
+  // Comparações apenas por data (sem hora) — datas da API vêm como UTC midnight
+  // e em UTC-3 viram véspera às 21h, criando brechas entre semanas se não normalizado
+  const toDay  = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const inicio = new Date(2026, from, 1);           // local midnight — já é só-data
+  const fim    = new Date(2026, to + 1, 0);         // último dia do mês — local midnight
 
   const ccFiltro = cc !== 'geral' ? cc : null;
 
   const findSem = d => {
-    for (const s of semanas) if (d >= s.start && d <= s.end) return s;
+    const dd = toDay(d); // normaliza para dia local, elimina desvio UTC
+    if (dd < inicio || dd > fim) return null;
+    for (const s of semanas) if (dd >= s.start && dd <= s.end) return s;
     return null;
   };
 
@@ -1894,12 +1898,10 @@ function fluxoAgregarDados(semanas, cc) {
       const dStr = _dataCaixa(item);
       if (dStr) {
         const d = new Date(dStr);
-        if (d >= inicio && d <= fim) {
-          const s = findSem(d);
-          if (s) {
-            s.entradas_real += vReal;
-            s.lancamentos.push({ tipo: 'entrada_real', data: d, desc, valor: vReal, stakeholder: stake, cc: ccLabel });
-          }
+        const s = findSem(d); // findSem já filtra por período e normaliza timezone
+        if (s) {
+          s.entradas_real += vReal;
+          s.lancamentos.push({ tipo: 'entrada_real', data: toDay(d), desc, valor: vReal, stakeholder: stake, cc: ccLabel });
         }
       }
     }
@@ -1909,12 +1911,10 @@ function fluxoAgregarDados(semanas, cc) {
       const dStr = item.dueDate || item.scheduleDate;
       if (dStr) {
         const d = new Date(dStr);
-        if (d >= inicio && d <= fim) {
-          const s = findSem(d);
-          if (s) {
-            s.entradas_prev += vPrev;
-            s.lancamentos.push({ tipo: 'entrada_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
-          }
+        const s = findSem(d);
+        if (s) {
+          s.entradas_prev += vPrev;
+          s.lancamentos.push({ tipo: 'entrada_prev', data: toDay(d), desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
         }
       }
     }
@@ -1937,21 +1937,19 @@ function fluxoAgregarDados(semanas, cc) {
         : (item.dueDate || item.scheduleDate);
       if (!dStr) continue;
       const d = new Date(dStr);
-      if (d < inicio || d > fim) continue;
       const s = findSem(d);
       if (!s) continue;
       s.saidas_real += v;
-      s.lancamentos.push({ tipo: 'saida_real', data: d, desc, valor: v, stakeholder: stake, cc: ccLabel });
+      s.lancamentos.push({ tipo: 'saida_real', data: toDay(d), desc, valor: v, stakeholder: stake, cc: ccLabel });
     } else {
       const dStr = item.dueDate || item.scheduleDate;
       if (!dStr) continue;
       const d = new Date(dStr);
-      if (d < inicio || d > fim) continue;
       const s = findSem(d);
       if (!s) continue;
       const vPrev = Math.abs(item.openValue || 0) > 0 ? Math.abs(item.openValue) : v;
       s.saidas_prev += vPrev;
-      s.lancamentos.push({ tipo: 'saida_prev', data: d, desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
+      s.lancamentos.push({ tipo: 'saida_prev', data: toDay(d), desc, valor: vPrev, stakeholder: stake, cc: ccLabel });
     }
   }
 

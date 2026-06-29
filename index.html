@@ -1021,8 +1021,8 @@ async function carregarNibo() {
     }
   }
 
-  // Investimentos/distribuições: não entram no Resultado Operacional
-  const ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
+  // Investimentos/distribuições: não entram no Resultado Operacional (função global — usada também no Fluxo de Caixa)
+  if (!window.ehInvestimento) window.ehInvestimento = cat => /adiantamento de lucros|equipamentos|utensílio/i.test(cat);
 
   // REGIME DE CAIXA: despesas — usa paymentDate (baixa manual) ou dueDate como fallback
   for (const item of (debitData.items||[])) {
@@ -1929,6 +1929,9 @@ function fluxoAgregarDados(semanas, cc) {
     const ccLabel = ccDeItem(item)[0] || 'Sem CC';
     const stake   = item.stakeholder?.name || '—';
     const desc    = item.description || '—';
+    const cat     = item.categories?.[0]?.categoryName || item.categoryName || '';
+    // Mesma regra do carregarNibo: investimentos/distribuições ficam fora do resultado operacional
+    if (window.ehInvestimento && window.ehInvestimento(cat)) continue;
     const pago    = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && v > 0);
 
     if (pago) {

@@ -1118,10 +1118,7 @@ function enriquecerAsaasMapFallback(dvList) {
     }
 
     if (bestIdx >= 0) {
-      const pd = available[bestIdx].paymentDate;
-      console.log('[Asaas][fix] ' + dNorm + '→' + pd +
-        ' R$' + niboVal.toFixed(2) + '+' + bestDiff.toFixed(2));
-      ASAAS_MAP[item.scheduleId] = pd;
+      ASAAS_MAP[item.scheduleId] = available[bestIdx].paymentDate;
       available.splice(bestIdx, 1);
       matched++;
     }

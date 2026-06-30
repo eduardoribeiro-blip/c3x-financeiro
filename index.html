@@ -1092,8 +1092,10 @@ async function carregarAsaasMap(asaasToken) {
 
   // Log amostra para diagnóstico de formato
   const amostraAsaas = Object.keys(dvMap).slice(0, 3);
-  const keys2025 = Object.keys(dvMap).filter(k => k.startsWith('2025'));
-  console.log('[Asaas] dvMap 2025 amostra: ' + JSON.stringify(keys2025.slice(0, 8)));
+  // Chaves 2025 que têm pelo menos um paymentDate em 2026 — os únicos que importam
+  const cross2025 = Object.entries(dvMap)
+    .filter(([k, dates]) => k.startsWith('2025') && dates.some(pd => pd.startsWith('2026')));
+  console.log('[Asaas] Chaves 2025 com paymentDate 2026 (' + cross2025.length + '): ' + JSON.stringify(cross2025.map(([k,d]) => k + ' → ' + d.filter(pd=>pd.startsWith('2026')))));
   return { totalRef, dvMap };
 }
 

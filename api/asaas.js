@@ -1,10 +1,12 @@
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Asaas-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { token, endpoint } = req.query;
+  // Token via header (preferido) ou query-param (legacy)
+  const token = req.headers['x-asaas-token'] || req.query.token;
+  const { endpoint } = req.query;
   if (!token || !endpoint) {
     return res.status(400).json({ error: 'token e endpoint obrigatorios' });
   }

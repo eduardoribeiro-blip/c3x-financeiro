@@ -953,7 +953,14 @@ function sumRange(arr, from, to) {
 }
 
 function mkChart(id, config) {
-  if (charts[id]) charts[id].destroy();
+  const existing = charts[id];
+  if (existing && existing.config.type === config.type) {
+    existing.data.labels   = config.data.labels;
+    existing.data.datasets = config.data.datasets;
+    existing.update('none'); // sem animação — troca de filtro é instantânea
+    return;
+  }
+  if (existing) existing.destroy();
   const el = document.getElementById(id);
   if (el) charts[id] = new Chart(el, config);
 }
@@ -971,9 +978,9 @@ const barOpts = (yFmt) => ({
    API
 ═══════════════════════════════════════════ */
 async function niboGet(endpoint, extra={}) {
-  let qs = `token=${encodeURIComponent(TOKEN)}&endpoint=${encodeURIComponent(endpoint)}`;
+  let qs = `endpoint=${encodeURIComponent(endpoint)}`;
   for (const [k,v] of Object.entries(extra)) qs += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
-  const r = await fetch(`/api/nibo?${qs}`);
+  const r = await fetch(`/api/nibo?${qs}`, { headers: { 'X-Nibo-Token': TOKEN } });
   if (!r.ok) throw new Error(`Erro ${r.status}`);
   return r.json();
 }
@@ -1057,7 +1064,6 @@ async function carregarAsaasMap(asaasToken) {
 
   while (true) {
     const params = new URLSearchParams({
-      token: asaasToken,
       endpoint: 'payments',
       status: 'RECEIVED',
       'dueDate[ge]': `${prevYear}-01-01`,
@@ -1066,7 +1072,7 @@ async function carregarAsaasMap(asaasToken) {
       offset,
     });
 
-    const resp = await fetch(`/api/asaas?${params}`);
+    const resp = await fetch(`/api/asaas?${params}`, { headers: { 'X-Asaas-Token': asaasToken } });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       throw new Error(`Asaas HTTP ${resp.status}: ${err.error || JSON.stringify(err).slice(0, 120)}`);
@@ -1135,8 +1141,8 @@ function enriquecerAsaasMapFallback(dvList) {
 // que o REAL já foi processado (mesma fonte de dados que o fluxo usa).
 async function carregarAsaasSaldos(asaasToken) {
   try {
-    const params = new URLSearchParams({ token: asaasToken, endpoint: 'finance/balance' });
-    const resp = await fetch(`/api/asaas?${params}`);
+    const params = new URLSearchParams({ endpoint: 'finance/balance' });
+    const resp = await fetch(`/api/asaas?${params}`, { headers: { 'X-Asaas-Token': asaasToken } });
     if (resp.ok) {
       const data = await resp.json();
       if (data.balance != null) {
@@ -3350,8 +3356,8 @@ async function integSalvarAsaas() {
 
   statusEl.style.color='var(--text2)'; statusEl.textContent='Verificando...';
   try {
-    const params = new URLSearchParams({ token: t, endpoint: 'payments', status: 'RECEIVED', limit: 1, offset: 0 });
-    const resp = await fetch(`/api/asaas?${params}`);
+    const params = new URLSearchParams({ endpoint: 'payments', status: 'RECEIVED', limit: 1, offset: 0 });
+    const resp = await fetch(`/api/asaas?${params}`, { headers: { 'X-Asaas-Token': t } });
     const data = await resp.json();
     if (!resp.ok || data.error) {
       statusEl.style.color='var(--red)';
@@ -3914,10 +3920,18 @@ function iniciarAutoRefresh() {
   }, 1000);
   countdownTimer = novoCountdown;
 
-  // Auto-refresh após 30 minutos
+  // Auto-refresh após 30 minutos — reinicia sempre, mesmo em caso de erro
   autoRefreshTimer = setTimeout(async () => {
-    await recarregar();
-    iniciarAutoRefresh(); // reinicia o ciclo
+    try {
+      await recarregar();
+    } catch(e) {
+      const badge = document.getElementById('countdown-badge');
+      const text  = document.getElementById('countdown-text');
+      if (badge) { badge.style.background = '#fee2e2'; badge.style.color = '#dc2626'; }
+      if (text)  text.textContent = 'Falha';
+    } finally {
+      iniciarAutoRefresh();
+    }
   }, AUTO_REFRESH_MIN * 60 * 1000);
 }
 

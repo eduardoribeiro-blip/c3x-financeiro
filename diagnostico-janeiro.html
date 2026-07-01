@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Diagnóstico Janeiro 2026 — C3X</title>
+<style>
+  body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 24px; margin: 0; }
+  h1 { color: #38bdf8; font-size: 18px; margin-bottom: 4px; }
+  p { color: #94a3b8; font-size: 13px; margin: 0 0 20px; }
+  .setup { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 20px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .setup label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px; }
+  .setup input { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 13px; width: 320px; }
+  button { background: #0ea5e9; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status { color: #fbbf24; font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+  .resumo { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px; display: flex; gap: 32px; flex-wrap: wrap; }
+  .resumo-item label { font-size: 11px; color: #64748b; text-transform: uppercase; display: block; }
+  .resumo-item span { font-size: 22px; font-weight: 700; color: #38bdf8; }
+  .resumo-item.warn span { color: #f87171; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { background: #1e293b; padding: 8px 10px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155; position: sticky; top: 0; }
+  tbody tr:hover { background: #1e293b44; }
+  td { padding: 6px 10px; border-bottom: 1px solid #1e293b; vertical-align: top; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+  .tag-pago { background: #14532d; color: #86efac; }
+  .tag-parc { background: #713f12; color: #fde68a; }
+  .tag-nao  { background: #450a0a; color: #fca5a5; }
+  .tag-data-pag { background: #1e3a5f; color: #93c5fd; }
+  .tag-data-due { background: #2d1e5f; color: #c4b5fd; }
+  .tag-data-sch { background: #1e3d2f; color: #6ee7b7; }
+  .val { color: #4ade80; font-weight: 600; }
+  .val-excl { color: #f87171; text-decoration: line-through; }
+  .excl-row td { opacity: 0.45; }
+  .excl-row td:last-child { color: #f87171; }
+  .total-row td { font-weight: 700; color: #38bdf8; border-top: 2px solid #334155; }
+  #tbl-wrap { max-height: 65vh; overflow-y: auto; }
+  .filtros { margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .filtros label { font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Diagnóstico Receita — Janeiro 2026</h1>
+<p>Reproduz exatamente a lógica do dashboard: <code>paymentDate || dueDate || scheduleDate</code>, ano 2026, mês 0 (janeiro)</p>
+
+<div class="setup">
+  <div>
+    <label>Token Nibo</label>
+    <input id="inp-token" type="text" placeholder="Cole seu token aqui"/>
+  </div>
+  <div>
+    <label>URL do proxy (/api/nibo)</label>
+    <input id="inp-base" type="text" value="https://c3x-financeiro.vercel.app/api/nibo"/>
+  </div>
+  <button id="btn-run" onclick="rodar()">Gerar Relatório</button>
+</div>
+<div id="status"></div>
+<div id="resultado" style="display:none">
+  <div class="resumo" id="resumo-box"></div>
+  <div class="filtros">
+    <label><input type="checkbox" id="chk-excl" onchange="renderTabela()" checked> Mostrar excluídos (não contam)</label>
+  </div>
+  <div id="tbl-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+</div>
+
+<script>
+let TODOS = [];
+
+function fmt(v) {
+  return v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return d.substring(0,10);
+}
+
+async function niboGetAll(base, token, endpoint, params={}) {
+  const PAGE = 500;
+  let allItems = [];
+  let skip = 0;
+  let pages = 0;
+  setStatus(`Buscando ${endpoint} (página ${pages+1})...`);
+  while (true) {
+    let qs = `token=${encodeURIComponent(token)}&endpoint=${encodeURIComponent(endpoint)}`;
+    const allParams = { ...params, '$top': String(PAGE), '$skip': String(skip) };
+    for (const [k,v] of Object.entries(allParams)) qs += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+    const r = await fetch(`${base}?${qs}`);
+    if (!r.ok) throw new Error(`Erro ${r.status} em ${endpoint}`);
+    const data = await r.json();
+    const items = data.items || [];
+    allItems = allItems.concat(items);
+    pages++;
+    if (items.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 9500) break;
+    setStatus(`Buscando ${endpoint} (página ${pages+1}, ${allItems.length} itens até agora)...`);
+  }
+  return allItems;
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+async function rodar() {
+  const token = document.getElementById('inp-token').value.trim();
+  const base  = document.getElementById('inp-base').value.trim();
+  if (!token || !base) { alert('Preencha token e URL do proxy.'); return; }
+
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  document.getElementById('resultado').style.display = 'none';
+  TODOS = [];
+
+  try {
+    const filtro = {
+      '$orderby': 'dueDate',
+      '$filter': '(year(dueDate) eq 2026 or year(dueDate) eq 2025 or year(dueDate) eq 2024)'
+    };
+
+    const items = await niboGetAll(base, token, 'schedules/credit', filtro);
+    setStatus(`${items.length} créditos recebidos da API. Processando...`);
+
+    for (const item of items) {
+      const isPaidTrue = item.isPaid === true;
+      const value      = Math.abs(item.value || 0);
+      const openValue  = Math.abs(item.openValue || 0);
+      const v = isPaidTrue ? value : value - openValue;
+
+      // Qual data será usada?
+      const datePay = item.paymentDate;
+      const dateDue = item.dueDate;
+      const dateSch = item.scheduleDate;
+      const dateUsed = datePay || dateDue || dateSch;
+      const dateField = datePay ? 'paymentDate' : (dateDue ? 'dueDate' : 'scheduleDate');
+
+      let excl = null;
+      if (v <= 0) excl = v === 0 ? 'v=0 (nada a contar)' : `v negativo (${v.toFixed(2)})`;
+      else if (!dateUsed) excl = 'sem data';
+      else {
+        const dt = new Date(dateUsed);
+        const ano = dt.getFullYear();
+        const mes = dt.getMonth(); // 0=jan
+        if (ano !== 2026) excl = `ano ${ano} ≠ 2026`;
+        else if (mes !== 0) excl = `mês ${mes+1} ≠ jan`;
+      }
+
+      const cat = item.categories?.[0]?.categoryName || item.categoryName || '';
+      const desc = item.description || '';
+      const stake = item.stakeholder?.name || '';
+
+      TODOS.push({
+        id:        item.scheduleId || item.id || '',
+        desc,
+        stake,
+        cat,
+        isPaid:    item.isPaid,
+        value,
+        openValue,
+        vContado:  excl ? 0 : v,
+        datePay:   fmtDate(datePay),
+        dateDue:   fmtDate(dateDue),
+        dateSch:   fmtDate(dateSch),
+        dateUsed:  fmtDate(dateUsed),
+        dateField,
+        excl,
+      });
+    }
+
+    document.getElementById('resultado').style.display = 'block';
+    renderResumo();
+    renderTabela();
+    setStatus(`Pronto. ${TODOS.filter(i=>!i.excl).length} itens entram em janeiro.`);
+  } catch(e) {
+    setStatus('Erro: ' + e.message);
+  }
+  btn.disabled = false;
+}
+
+function renderResumo() {
+  const contados = TODOS.filter(i => !i.excl);
+  const total = contados.reduce((s,i) => s+i.vContado, 0);
+  const nibo = 39882.07;
+  const diff = total - nibo;
+  document.getElementById('resumo-box').innerHTML = `
+    <div class="resumo-item"><label>Total no Dashboard</label><span>${fmt(total)}</span></div>
+    <div class="resumo-item"><label>Total no Nibo</label><span style="color:#fbbf24">${fmt(nibo)}</span></div>
+    <div class="resumo-item warn"><label>Diferença</label><span>${diff >= 0 ? '+' : ''}${fmt(diff)}</span></div>
+    <div class="resumo-item"><label>Itens contados</label><span>${contados.length}</span></div>
+    <div class="resumo-item"><label>Itens excluídos</label><span style="color:#94a3b8">${TODOS.length - contados.length}</span></div>
+  `;
+}
+
+function renderTabela() {
+  const mostrarExcl = document.getElementById('chk-excl').checked;
+  const itens = mostrarExcl ? TODOS : TODOS.filter(i=>!i.excl);
+
+  const thead = document.getElementById('thead');
+  const tbody = document.getElementById('tbody');
+
+  thead.innerHTML = `<tr>
+    <th>#</th><th>Descrição</th><th>Stakeholder</th><th>Categoria</th>
+    <th>Status</th><th>Value</th><th>OpenValue</th><th>V Contado</th>
+    <th>PaymentDate</th><th>DueDate</th><th>SchDate</th><th>Data Usada</th><th>Campo</th>
+    <th>Excluído?</th>
+  </tr>`;
+
+  let totalContado = 0;
+  let rows = '';
+  itens.forEach((it, idx) => {
+    const excCls = it.excl ? 'excl-row' : '';
+    const pagoTag = it.isPaid === true
+      ? '<span class="tag tag-pago">PAGO</span>'
+      : it.isPaid === false
+        ? (it.openValue < it.value ? '<span class="tag tag-parc">PARCIAL</span>' : '<span class="tag tag-nao">NÃO PAGO</span>')
+        : '<span class="tag tag-nao">?</span>';
+    const campoTag = it.dateField === 'paymentDate'
+      ? `<span class="tag tag-data-pag">paymentDate</span>`
+      : it.dateField === 'dueDate'
+        ? `<span class="tag tag-data-due">dueDate</span>`
+        : `<span class="tag tag-data-sch">scheduleDate</span>`;
+    if (!it.excl) totalContado += it.vContado;
+    rows += `<tr class="${excCls}">
+      <td style="color:#64748b">${idx+1}</td>
+      <td title="${it.desc}">${it.desc || '—'}</td>
+      <td title="${it.stake}">${it.stake || '—'}</td>
+      <td title="${it.cat}">${it.cat || '—'}</td>
+      <td>${pagoTag}</td>
+      <td>${fmt(it.value)}</td>
+      <td>${fmt(it.openValue)}</td>
+      <td class="${it.excl ? 'val-excl' : 'val'}">${fmt(it.vContado || 0)}</td>
+      <td>${it.datePay}</td>
+      <td>${it.dateDue}</td>
+      <td>${it.dateSch}</td>
+      <td><strong>${it.dateUsed}</strong></td>
+      <td>${campoTag}</td>
+      <td>${it.excl ? `<span style="color:#f87171">${it.excl}</span>` : '<span style="color:#4ade80">✓ conta</span>'}</td>
+    </tr>`;
+  });
+
+  rows += `<tr class="total-row">
+    <td colspan="7"></td>
+    <td>${fmt(totalContado)}</td>
+    <td colspan="6"></td>
+  </tr>`;
+
+  tbody.innerHTML = rows;
+}
+</script>
+</body>
+</html>

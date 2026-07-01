@@ -1,10 +1,12 @@
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nibo-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { token, endpoint, base } = req.query;
+  // Token via header (preferido) ou query-param (legacy)
+  const token = req.headers['x-nibo-token'] || req.query.token;
+  const { endpoint, base } = req.query;
   if (!token || !endpoint) {
     return res.status(400).json({ error: 'token e endpoint obrigatorios' });
   }
@@ -19,11 +21,9 @@ module.exports = async function handler(req, res) {
 
   let niboUrl;
   if (base === 'empresa') {
-    // API interna do Nibo web app: api-empresa.nibo.com.br
     params.set('apitoken', token);
     niboUrl = `https://api-empresa.nibo.com.br/${decodedEndpoint}?${params.toString()}`;
   } else {
-    // API pública padrão
     params.set('apitoken', token);
     niboUrl = `https://api.nibo.com.br/empresas/v1/${decodedEndpoint}?${params.toString()}`;
   }

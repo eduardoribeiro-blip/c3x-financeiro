@@ -1194,20 +1194,24 @@ async function carregarAsaasSaldos(asaasToken) {
     ASAAS_TAXAS_LIST = taxasList;
     ASAAS_ENTRADAS_LIST = entradasList;
 
-    // 3. Transferências saídas — monta lista com data e valor por item
+    // 3. Transferências saídas — sem filtro de status (inspeciona o que retorna)
     const saidasList = [];
     let transferidos = 0, off3 = 0;
     while (true) {
       const p3 = new URLSearchParams({
-        endpoint: 'transfers', status: 'DONE',
+        endpoint: 'transfers',
         'dateCreated[ge]': `${anoFmt}-01-01`,
         'dateCreated[le]': limFmt,
         limit: 100, offset: off3,
       });
       const r3 = await fetch(`/api/asaas?${p3}`, { headers: { 'X-Asaas-Token': asaasToken } });
-      if (!r3.ok) break;
+      if (!r3.ok) { console.warn('[Asaas] transfers HTTP ' + r3.status); break; }
       const d3 = await r3.json();
-      for (const t of (d3.data || [])) {
+      if (d3.errors) { console.warn('[Asaas] transfers errors:', JSON.stringify(d3.errors)); break; }
+      const items3 = d3.data || [];
+      if (off3 === 0) console.log('[Asaas] transfers p1: ' + items3.length + ' itens | statuses: ' + [...new Set(items3.map(t => t.status))].join(','));
+      for (const t of items3) {
+        if (t.status === 'CANCELLED' || t.status === 'FAILED') continue;
         const v = parseFloat(t.value ?? 0);
         transferidos += v;
         const date = t.effectiveDate || t.dateCreated;
@@ -1223,20 +1227,23 @@ async function carregarAsaasSaldos(asaasToken) {
     }
     ASAAS_TRANSFERIDOS_ANO = transferidos;
 
-    // 4. Contas pagas (bill-payment)
+    // 4. Contas pagas (bill-payment) — sem filtro de status
     let off4 = 0;
     while (true) {
       const p4 = new URLSearchParams({
-        endpoint: 'bill-payment', status: 'DONE',
+        endpoint: 'bill-payment',
         'paymentDate[ge]': `${anoFmt}-01-01`,
         'paymentDate[le]': limFmt,
         limit: 100, offset: off4,
       });
       const r4 = await fetch(`/api/asaas?${p4}`, { headers: { 'X-Asaas-Token': asaasToken } });
-      if (!r4.ok) { console.warn('[Asaas] bill-payment indisponível (status ' + r4.status + ')'); break; }
+      if (!r4.ok) { console.warn('[Asaas] bill-payment HTTP ' + r4.status); break; }
       const d4 = await r4.json();
-      if (d4.errors) { console.warn('[Asaas] bill-payment:', JSON.stringify(d4.errors)); break; }
-      for (const b of (d4.data || [])) {
+      if (d4.errors) { console.warn('[Asaas] bill-payment errors: ' + JSON.stringify(d4.errors)); break; }
+      const items4 = d4.data || [];
+      if (off4 === 0) console.log('[Asaas] bill-payment p1: ' + items4.length + ' itens');
+      for (const b of items4) {
+        if (b.status === 'CANCELLED' || b.status === 'PENDING') continue;
         const v = parseFloat(b.value ?? 0);
         if (v > 0 && b.paymentDate) saidasList.push({
           date: b.paymentDate, valor: v,

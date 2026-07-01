@@ -2284,6 +2284,14 @@ function fluxoAgregarDados(semanas, cc) {
     }
   }
 
+  // DEBUG TEMPORÁRIO — remover após diagnóstico
+  if (from===0 && to===0) {
+    const debJan = semanas.flatMap(s=>s.lancamentos.filter(l=>l.tipo==='saida_real'));
+    let soma=0;
+    debJan.forEach(l=>{ soma+=l.valor; if(l.valor>500) console.log('[DEB>500]',l.data.toISOString().slice(0,10),'|',l.valor.toFixed(2),'|',l.desc,'|',l.stakeholder); });
+    console.log('[Fluxo JAN] entradas='+semanas.reduce((t,s)=>t+s.entradas_real,0).toFixed(2)+' saidas='+soma.toFixed(2)+' saldo='+(SALDO_INICIAL_2026+semanas.reduce((t,s)=>t+s.entradas_real-s.saidas_real,0)).toFixed(2));
+  }
+
   for (const s of semanas) {
     acum += s.entradas_real - s.saidas_real;
     s.saldo_acum = acum;

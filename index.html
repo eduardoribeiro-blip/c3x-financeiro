@@ -1221,7 +1221,8 @@ const SALDO_ABERTURA_DEFAULT = 14426.68; // saldo operacional 01/Jan/2026 (24427
 const SALDO_ABERTURA_MENSAL = {
   2026: {
     1: 16912.20,  // Jan: ajustado para fechar em R$42.497,32 (net Nibo Jan = R$25.585,12)
-    2: 42497.32,  // Fev: fechamento verificado de Jan/2026
+    2: 42497.32,  // Fev: fechamento verificado de Jan/2026 (abertura Fev a ajustar)
+    3: 43306.92,  // Mar: fechamento verificado de Fev/2026
   }
 };
 
@@ -2301,6 +2302,11 @@ function fluxoAgregarDados(semanas, cc) {
     acum += s.entradas_real - s.saidas_real;
     s.saldo_acum = acum;
   }
+  const _totEnt = semanas.reduce((s,w)=>s+w.entradas_real,0);
+  const _totSai = semanas.reduce((s,w)=>s+w.saidas_real,0);
+  const _saldoFinal = semanas.length ? semanas[semanas.length-1].saldo_acum : 0;
+  const [_from] = periodoMeses();
+  console.log(`[Fluxo período M${_from+1}] abertura=${(acum - (_totEnt - _totSai)).toFixed(2)} entradas=${_totEnt.toFixed(2)} saidas=${_totSai.toFixed(2)} net=${(_totEnt-_totSai).toFixed(2)} saldo_final=${_saldoFinal.toFixed(2)}`);
   return semanas;
 }
 

@@ -893,9 +893,11 @@ const PROJ_CAT = {
 let RAW_CREDITS = [];
 let RAW_DEBITS  = [];
 let RAW_ENTRIES = [];         // movimentos bancários reais (entries) — se disponível via API
-let SALDO_ASAAS_ATUAL = null; // saldo atual da conta Recebimentos Asaas (via accounts API)
-let SALDO_INICIAL_2026 = 0;   // saldo de abertura em 01/Jan/2026 (calculado)
-let ASAAS_MAP = {};           // scheduleId → paymentDate real (via Asaas API)
+let SALDO_ASAAS_ATUAL = null;      // saldo atual da conta Recebimentos Asaas (via accounts API)
+let ASAAS_RECEBIDOS_ANO = null;    // total recebido no ANO_FILTRO por paymentDate (via Asaas API)
+let ASAAS_TRANSFERIDOS_ANO = null; // total transferido para fora no ANO_FILTRO (via Asaas API)
+let SALDO_INICIAL_2026 = 0;        // saldo de abertura em 01/Jan (calculado via Asaas)
+let ASAAS_MAP = {};                // scheduleId → paymentDate real (via Asaas API)
 
 // Regime de caixa: data de recebimento.
 // Prioridade: ASAAS_MAP[scheduleId] > paymentDate > dueDate > scheduleDate
@@ -1132,61 +1134,84 @@ function enriquecerAsaasMapFallback(dvList) {
   console.log('[Asaas] ASAAS_MAP: ' + matched + ' itens com paymentDate corrigido');
 }
 
-// Busca saldo atual e saldo de abertura do ano diretamente na API Asaas
-// Busca saldo atual da conta Asaas via /finance/balance.
-// NÃO calcula a abertura por /financialTransactions — Asaas inclui tarifas,
-// antecipações e ajustes que não existem nos schedules do Nibo, criando
-// inconsistência: abertura_Asaas + net_Nibo ≠ saldo_atual.
-// A abertura é calculada separadamente em calcularSaldoAbertura() depois
-// que o REAL já foi processado (mesma fonte de dados que o fluxo usa).
+// Busca saldo atual + total recebido e total transferido no ANO_FILTRO diretamente da API Asaas.
+// Esses três valores permitem calcular o saldo de abertura em calcularSaldoAbertura():
+//   ABERTURA = ATUAL − RECEBIDOS_ANO + TRANSFERIDOS_ANO
 async function carregarAsaasSaldos(asaasToken) {
+  const hoje = new Date();
+  const anoFmt = String(ANO_FILTRO);
+  const hojeFmt = anoFmt + '-' +
+    String(hoje.getMonth() + 1).padStart(2, '0') + '-' +
+    String(hoje.getDate()).padStart(2, '0');
+  // Para anos passados usa 31/12 como limite; para o ano corrente usa hoje
+  const limFmt = hoje.getFullYear() === ANO_FILTRO ? hojeFmt : `${anoFmt}-12-31`;
+
   try {
-    const params = new URLSearchParams({ endpoint: 'finance/balance' });
-    const resp = await fetch(`/api/asaas?${params}`, { headers: { 'X-Asaas-Token': asaasToken } });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.balance != null) {
-        SALDO_ASAAS_ATUAL = parseFloat(data.balance);
-        console.log('[Asaas] Saldo atual: R$' + SALDO_ASAAS_ATUAL.toFixed(2));
-      }
+    // 1. Saldo atual
+    const r1 = await fetch(`/api/asaas?${new URLSearchParams({ endpoint: 'finance/balance' })}`,
+      { headers: { 'X-Asaas-Token': asaasToken } });
+    if (r1.ok) {
+      const d1 = await r1.json();
+      if (d1.balance != null) SALDO_ASAAS_ATUAL = parseFloat(d1.balance);
     }
-  } catch(e) { console.warn('[Asaas] Saldo atual: erro -', e.message); }
+
+    // 2. Total recebido no ANO_FILTRO por paymentDate (usa netValue — já descontadas tarifas Asaas)
+    let recebidos = 0, off2 = 0;
+    while (true) {
+      const p2 = new URLSearchParams({
+        endpoint: 'payments', status: 'RECEIVED',
+        'paymentDate[ge]': `${anoFmt}-01-01`,
+        'paymentDate[le]': limFmt,
+        limit: 100, offset: off2,
+      });
+      const r2 = await fetch(`/api/asaas?${p2}`, { headers: { 'X-Asaas-Token': asaasToken } });
+      if (!r2.ok) break;
+      const d2 = await r2.json();
+      for (const it of (d2.data || [])) recebidos += parseFloat(it.netValue ?? it.value ?? 0);
+      if (!d2.hasMore) break;
+      off2 += 100; if (off2 > 9900) break;
+    }
+    ASAAS_RECEBIDOS_ANO = recebidos;
+
+    // 3. Total transferido para fora no ANO_FILTRO (transferências para conta bancária externa)
+    let transferidos = 0, off3 = 0;
+    while (true) {
+      const p3 = new URLSearchParams({
+        endpoint: 'transfers', status: 'DONE',
+        'dateCreated[ge]': `${anoFmt}-01-01`,
+        'dateCreated[le]': limFmt,
+        limit: 100, offset: off3,
+      });
+      const r3 = await fetch(`/api/asaas?${p3}`, { headers: { 'X-Asaas-Token': asaasToken } });
+      if (!r3.ok) break;
+      const d3 = await r3.json();
+      for (const t of (d3.data || [])) transferidos += parseFloat(t.value ?? 0);
+      if (!d3.hasMore) break;
+      off3 += 100; if (off3 > 9900) break;
+    }
+    ASAAS_TRANSFERIDOS_ANO = transferidos;
+
+    console.log('[Asaas] atual: R$' + (SALDO_ASAAS_ATUAL?.toFixed(2) ?? '?') +
+      ' | recebidos ' + ANO_FILTRO + ': R$' + recebidos.toFixed(2) +
+      ' | transferidos: R$' + transferidos.toFixed(2));
+  } catch(e) { console.warn('[Asaas] Saldo/fluxo:', e.message); }
 }
 
-// Calcula SALDO_INICIAL_2026 como: saldo_atual − net_Nibo(ANO_FILTRO até hoje)
-// Usa exatamente os mesmos dados (RAW_CREDITS + RAW_DEBITS) que o fluxo usa,
-// garantindo que abertura + fluxo_acumulado = saldo_atual_Asaas.
-// Chamado após REAL ser processado (schedules já lidos e ASAAS_MAP aplicado).
+// Saldo de abertura = atual − recebidos_no_ano + transferidos_para_fora_no_ano
+// (fórmula exclusiva da conta Asaas — não depende dos schedules do Nibo)
 function calcularSaldoAbertura() {
-  if (SALDO_ASAAS_ATUAL == null) {
+  if (SALDO_ASAAS_ATUAL == null || ASAAS_RECEBIDOS_ANO == null || ASAAS_TRANSFERIDOS_ANO == null) {
     const stored = parseFloat(localStorage.getItem('c3x_saldo_abertura_asaas') || '');
     SALDO_INICIAL_2026 = isNaN(stored) ? 14426.68 : stored;
-    console.log('[Fluxo] Saldo abertura (localStorage/default): R$' + SALDO_INICIAL_2026.toFixed(2));
+    console.log('[Fluxo] Saldo abertura (cache/default): R$' + SALDO_INICIAL_2026.toFixed(2));
     return;
   }
-  const hoje = new Date();
-  const toDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const jan1  = new Date(ANO_FILTRO, 0, 1);
-
-  let netNibo = 0;
-  for (const item of RAW_CREDITS) {
-    const ok = item.isPaid === true || item.isEntry === true;
-    if (!ok) continue;
-    const ds = _dataCaixa(item); if (!ds) continue;
-    const dt = toDay(new Date(ds));
-    if (dt >= jan1 && dt <= toDay(hoje)) netNibo += Math.abs(item.value || 0);
-  }
-  for (const item of RAW_DEBITS) {
-    const ok = item.isPaid === true || (item.isPaid == null && Math.abs(item.openValue||0) === 0 && Math.abs(item.value||0) > 0);
-    if (!ok) continue;
-    const ds = item.paymentDate || item.dueDate || item.scheduleDate; if (!ds) continue;
-    const dt = toDay(new Date(ds));
-    if (dt >= jan1 && dt <= toDay(hoje)) netNibo -= Math.abs(item.value || 0);
-  }
-  SALDO_INICIAL_2026 = SALDO_ASAAS_ATUAL - netNibo;
+  SALDO_INICIAL_2026 = SALDO_ASAAS_ATUAL - ASAAS_RECEBIDOS_ANO + ASAAS_TRANSFERIDOS_ANO;
   localStorage.setItem('c3x_saldo_abertura_asaas', SALDO_INICIAL_2026.toFixed(2));
   console.log('[Fluxo] Saldo abertura ' + ANO_FILTRO + ': R$' + SALDO_INICIAL_2026.toFixed(2) +
-    ' | atual: R$' + SALDO_ASAAS_ATUAL.toFixed(2) + ' | net Nibo: R$' + netNibo.toFixed(2));
+    ' | atual: R$' + SALDO_ASAAS_ATUAL.toFixed(2) +
+    ' | recebidos: R$' + ASAAS_RECEBIDOS_ANO.toFixed(2) +
+    ' | transferidos: R$' + ASAAS_TRANSFERIDOS_ANO.toFixed(2));
 }
 
 
@@ -2345,17 +2370,6 @@ function fluxoToggleDrill(key) {
   fluxoRenderTabela(fluxoAgregarDados(fluxoGerarSemanas(from, to), FLUXO_ABA));
 }
 
-function fluxoEditarAbertura() {
-  const atual = SALDO_INICIAL_2026.toFixed(2).replace('.', ',');
-  const val = prompt('Saldo de abertura em 01/Jan/2026 (Recebimentos Asaas):\nConsulte o extrato do mês anterior no Nibo.', atual);
-  if (val === null) return;
-  // Aceita formato BR (1.234,56) ou US (1234.56)
-  const v = parseFloat(val.trim().replace(/\./g,'').replace(',','.'));
-  if (isNaN(v) || v < 0) { alert('Valor inválido.'); return; }
-  SALDO_INICIAL_2026 = v;
-  localStorage.setItem('c3x_saldo_abertura_asaas', v.toString());
-  renderFluxo();
-}
 
 function fluxoSetAba(aba, el) {
   FLUXO_ABA   = aba;
@@ -2419,8 +2433,8 @@ function renderFluxo() {
     <div class="kpi-card">
       <div class="kpi-label">Saldo Conta Asaas</div>
       <div class="kpi-value" style="color:${SALDO_ASAAS_ATUAL!==null?(SALDO_ASAAS_ATUAL>=0?'var(--blue)':'var(--red)'):'var(--blue)'}">${SALDO_ASAAS_ATUAL!==null?fmtK(SALDO_ASAAS_ATUAL):fmtK(SALDO_INICIAL_2026)}</div>
-      <div class="kpi-proj">Abertura Jan/2026: <strong>${fmtK(SALDO_INICIAL_2026)}</strong> <a href="#" onclick="fluxoEditarAbertura();return false" style="font-size:11px;color:var(--blue);margin-left:3px" title="Editar saldo de abertura">✎</a></div>
-      <div class="kpi-delta pos">Recebimentos Asaas${SALDO_ASAAS_ATUAL===null?' · conf. manual':''}</div>
+      <div class="kpi-proj">Abertura Jan/${ANO_FILTRO}: <strong>${fmtK(SALDO_INICIAL_2026)}</strong></div>
+      <div class="kpi-delta pos">Recebimentos Asaas</div>
     </div>
   `;
 

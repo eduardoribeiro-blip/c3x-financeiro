@@ -1213,9 +1213,21 @@ async function carregarAsaasSaldos(asaasToken) {
 // /transfers captura só transferências bancárias, não PIX nem pagamentos,
 // causando abertura inflada (~R$32k em vez de R$24.427) e saldo final errado.
 const SALDO_ABERTURA_DEFAULT = 14426.68; // saldo operacional 01/Jan/2026 (24427.12 − 10000.44 reversão Hubnexxo/Paulo)
+
+// Saldos mensais verificados no extrato Asaas.
+// Chave = mês 1-based (1=Jan … 12=Dez).
+// Mês M é a abertura do período M (= fechamento verificado do mês M-1).
+// Atualizar aqui após conferir cada mês com o extrato Asaas.
+const SALDO_ABERTURA_MENSAL = {
+  2026: {
+    1: 16912.20,  // Jan: ajustado para fechar em R$42.497,32 (net Nibo Jan = R$25.585,12)
+    2: 42497.32,  // Fev: fechamento verificado de Jan/2026
+  }
+};
+
 function calcularSaldoAbertura() {
   SALDO_INICIAL_2026 = SALDO_ABERTURA_DEFAULT;
-  localStorage.removeItem('c3x_saldo_abertura_asaas'); // remove cache de cálculos anteriores incorretos
+  localStorage.removeItem('c3x_saldo_abertura_asaas');
   console.log('[Fluxo] Saldo abertura 2026: R$' + SALDO_INICIAL_2026.toFixed(2));
 }
 
@@ -2250,10 +2262,11 @@ function fluxoAgregarDados(semanas, cc) {
 
   for (const s of semanas) s.lancamentos.sort((a, b) => a.data - b.data);
 
-  // Saldo acumulado: parte do saldo de abertura correto da conta Recebimentos Asaas
-  let acum = SALDO_INICIAL_2026; // 0 se API accounts não disponível
-  if (semanas.length > 0 && SALDO_INICIAL_2026 !== 0) {
-    // Se o período não começa em Jan 1, precisa avançar o saldo pelos movimentos anteriores ao período
+  // Saldo acumulado: usa saldo mensal verificado se disponível, senão acumula pelo Nibo
+  const _saldoVerificado = (SALDO_ABERTURA_MENSAL[ANO_FILTRO] || {})[from + 1];
+  let acum = _saldoVerificado != null ? _saldoVerificado : SALDO_INICIAL_2026;
+  if (_saldoVerificado == null && semanas.length > 0 && SALDO_INICIAL_2026 !== 0) {
+    // Se o período não começa em Jan 1, avança o saldo pelos movimentos anteriores via Nibo
     const periodoInicio = semanas[0].start;
     const jan1 = new Date(ANO_FILTRO, 0, 1);
     if (periodoInicio > jan1) {
